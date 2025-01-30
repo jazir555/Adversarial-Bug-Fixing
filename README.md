@@ -1,2 +1,1 @@
-# n8n.io-configuration
-n8n automation config
+# NodeRed Automation to automatically bug check code using adversarial checking via multiple chatbots.
