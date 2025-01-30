@@ -41,6 +41,13 @@ NGINX_CONF_DIR="$PROJECT_DIR/nginx/conf.d"
 NGINX_CONF_FILE="$NGINX_CONF_DIR/default.conf"
 SSL_DIR="$PROJECT_DIR/config/ssl"
 
+# Variables for dynamic inputs
+DOCKERHUB_USERNAME=""
+REMOTE_USER=""
+SERVER_IP=""
+DOMAIN_NAME=""
+EMAIL_ADDRESS=""
+
 # =============================================================================
 # Function Definitions
 # =============================================================================
@@ -962,23 +969,23 @@ jobs:
 
     - name: Push Docker Image
       run: |
-        docker tag node-red-automation:latest your-dockerhub-username/node-red-automation:latest
-        docker push your-dockerhub-username/node-red-automation:latest
+        docker tag node-red-automation:latest ${{ secrets.DOCKERHUB_USERNAME }}/node-red-automation:latest
+        docker push ${{ secrets.DOCKERHUB_USERNAME }}/node-red-automation:latest
 
     - name: Deploy to Server
       uses: easingthemes/ssh-deploy@v2.0.7
       with:
         ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-        remote-user: your-remote-user
-        server-ip: your-server-ip
+        remote-user: ${{ secrets.REMOTE_USER }}
+        server-ip: ${{ secrets.SERVER_IP }}
         remote-path: /path/to/deploy
         command: |
-          docker pull your-dockerhub-username/node-red-automation:latest
+          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/node-red-automation:latest
           docker stop node-red-automation || true
           docker rm node-red-automation || true
           docker run -d -p 1880:1880 --name node-red-automation \
             --env-file /path/to/deploy/.env \
-            your-dockerhub-username/node-red-automation:latest
+            ${{ secrets.DOCKERHUB_USERNAME }}/node-red-automation:latest
 EOF
     log "Created GitHub Actions CI/CD workflow."
 }
@@ -1275,6 +1282,7 @@ secure_docker() {
     usermod -aG docker "$SUDO_USER"
 
     log "Added user $SUDO_USER to the docker group."
+    log "Please log out and log back in for the Docker group changes to take effect."
 }
 
 # Function to setup Docker secrets for sensitive information
@@ -1319,8 +1327,11 @@ setup_ssl() {
     # Prompt for domain name
     read -p "Enter your domain name for SSL (e.g., example.com): " DOMAIN_NAME
 
+    # Prompt for email address
+    read -p "Enter your email address for SSL notifications: " EMAIL_ADDRESS
+
     # Obtain SSL certificates
-    certbot certonly --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos -m your-email@example.com || error_exit "Failed to obtain SSL certificates."
+    certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos -m "$EMAIL_ADDRESS" || error_exit "Failed to obtain SSL certificates."
 
     # Configure Nginx as a reverse proxy with SSL
     create_dir "$NGINX_CONF_DIR"
@@ -1339,8 +1350,8 @@ server {
     listen 443 ssl;
     server_name $DOMAIN_NAME;
 
-    ssl_certificate /etc/nginx/ssl/fullchain.pem;
-    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+    ssl_certificate /etc/letsencrypt/live/$DOMAIN_NAME/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN_NAME/privkey.pem;
 
     ssl_protocols       TLSv1.2 TLSv1.3;
     ssl_ciphers         HIGH:!aNULL:!MD5;
@@ -1366,6 +1377,9 @@ server {
     # Additional location blocks as needed
 }
 EOF
+
+    # Reload Nginx to apply changes
+    systemctl reload nginx || error_exit "Failed to reload Nginx."
 
     log "Configured Nginx as a reverse proxy with SSL."
 }
@@ -1563,6 +1577,7 @@ This setup script automates the installation and configuration of a Node-RED env
 - **npm**
 - **sudo/root privileges**
 - **Domain Name**: For SSL certificate setup
+- **Docker Hub Account**: For storing Docker images
 
 ## Setup Steps
 
@@ -1572,27 +1587,37 @@ This setup script automates the installation and configuration of a Node-RED env
     sudo ./setup-node-red-automation.sh
     ```
 
-2. **Edit `.env` File**:
+2. **Provide Required Inputs**:
+    - **Admin Password**: When prompted, enter a strong password for Node-RED admin access.
+    - **GitHub Token**: Enter your GitHub token for committing code.
+    - **Slack Token**: Enter your Slack token for notifications.
+    - **Domain Name**: Provide your domain name for SSL setup.
+    - **Email Address**: Enter your email address for SSL notifications.
+
+3. **Edit `.env` File**:
     Replace all placeholders with your actual credentials.
     ```bash
     sudo nano node-red-automation/.env
     ```
 
-3. **Start Docker Compose Services**:
+4. **Start Docker Compose Services**:
     ```bash
     sudo docker-compose up -d
     ```
 
-4. **Access Node-RED Dashboard**:
+5. **Access Node-RED Dashboard**:
     Navigate to [https://yourdomain.com/ui](https://yourdomain.com/ui) in your browser.
 
-5. **Verify Services**:
+6. **Verify Services**:
     ```bash
     sudo docker-compose ps
     ```
 
-6. **Setup SSL (if not done automatically)**:
-    Follow Certbot prompts or rerun SSL setup if necessary.
+7. **Setup SSL (if not done automatically)**:
+    The script attempts to set up SSL automatically. If you encounter issues, you can manually run:
+    ```bash
+    sudo certbot --nginx
+    ```
 
 ## Maintenance
 
