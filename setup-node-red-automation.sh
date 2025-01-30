@@ -47,6 +47,7 @@ REMOTE_USER=""
 SERVER_IP=""
 DOMAIN_NAME=""
 EMAIL_ADDRESS=""
+DOCKER_PATH="/path/to/deploy"  # Replace with actual deployment path
 
 # =============================================================================
 # Function Definitions
@@ -89,6 +90,16 @@ create_dir() {
     else
         log "Directory already exists: $1"
     fi
+}
+
+# Function to prompt for dynamic inputs
+prompt_inputs() {
+    read -p "Enter your Docker Hub Username: " DOCKERHUB_USERNAME
+    read -p "Enter your Remote Server User: " REMOTE_USER
+    read -p "Enter your Remote Server IP: " SERVER_IP
+    read -p "Enter your Domain Name for SSL (e.g., example.com): " DOMAIN_NAME
+    read -p "Enter your Email Address for SSL notifications: " EMAIL_ADDRESS
+    read -p "Enter your Deployment Path on Remote Server (e.g., /var/www/node-red-automation): " DOCKER_PATH
 }
 
 # Function to check for Node.js and npm before proceeding
@@ -721,6 +732,8 @@ services:
     volumes:
       - ./nginx/conf.d:/etc/nginx/conf.d
       - ./config/ssl:/etc/nginx/ssl
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
     depends_on:
       - node-red
     restart: unless-stopped
@@ -734,6 +747,8 @@ services:
     build: .
     environment:
       - NODE_RED_PORT=${NODE_RED_PORT}
+    env_file:
+      - .env
     volumes:
       - ./flows.json:/data/flows.json
       - ./config:/data/config
@@ -782,6 +797,14 @@ services:
       interval: 1m30s
       timeout: 10s
       retries: 3
+
+  certbot:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew; done;'"
+    restart: unless-stopped
 
 secrets:
   github_token:
@@ -927,7 +950,7 @@ EOF
 create_ci_cd_yaml() {
     create_dir "$PROJECT_DIR/.github/workflows"
 
-    cat > "$CI_CD_YML" <<'EOF'
+    cat > "$CI_CD_YML" <<EOF
 name: CI/CD Pipeline
 
 on:
@@ -964,28 +987,24 @@ jobs:
     - name: Log in to Docker Hub
       uses: docker/login-action@v1
       with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
+        username: \${{ secrets.DOCKER_USERNAME }}
+        password: \${{ secrets.DOCKER_PASSWORD }}
 
     - name: Push Docker Image
       run: |
-        docker tag node-red-automation:latest ${{ secrets.DOCKERHUB_USERNAME }}/node-red-automation:latest
-        docker push ${{ secrets.DOCKERHUB_USERNAME }}/node-red-automation:latest
+        docker tag node-red-automation:latest \${{ secrets.DOCKERHUB_USERNAME }}/node-red-automation:latest
+        docker push \${{ secrets.DOCKERHUB_USERNAME }}/node-red-automation:latest
 
     - name: Deploy to Server
       uses: easingthemes/ssh-deploy@v2.0.7
       with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-        remote-user: ${{ secrets.REMOTE_USER }}
-        server-ip: ${{ secrets.SERVER_IP }}
-        remote-path: /path/to/deploy
+        ssh-private-key: \${{ secrets.SSH_PRIVATE_KEY }}
+        remote-user: \${{ secrets.REMOTE_USER }}
+        server-ip: \${{ secrets.SERVER_IP }}
+        remote-path: \${{ secrets.DOCKER_PATH }}
         command: |
-          docker pull ${{ secrets.DOCKERHUB_USERNAME }}/node-red-automation:latest
-          docker stop node-red-automation || true
-          docker rm node-red-automation || true
-          docker run -d -p 1880:1880 --name node-red-automation \
-            --env-file /path/to/deploy/.env \
-            ${{ secrets.DOCKERHUB_USERNAME }}/node-red-automation:latest
+          docker-compose -f \${{ secrets.DOCKER_PATH }}/docker-compose.yml pull
+          docker-compose -f \${{ secrets.DOCKER_PATH }}/docker-compose.yml up -d --remove-orphans
 EOF
     log "Created GitHub Actions CI/CD workflow."
 }
@@ -1134,14 +1153,16 @@ backups/
 # Monitoring
 /monitoring/
 
+# Subflows
 /subflows/
 
+# Node-RED Settings
 /config/settings.js
 
 # SSL Certificates
 /config/ssl/
 
-/Grafana Data
+# Grafana Data
 grafana-data/
 
 # Docker Volumes
@@ -1242,7 +1263,7 @@ implement_security() {
     setup_docker_secrets
 
     # 5. Data Encryption: Handled via Nginx as a reverse proxy with SSL
-    setup_ssl
+    # SSL setup is now handled within Docker, so no further action needed here
 
     log "Implemented security enhancements."
 }
@@ -1317,71 +1338,11 @@ secure_docker_containers() {
     fi
 }
 
-# Function to setup SSL using Certbot and Nginx as reverse proxy
+# Function to setup SSL using Certbot and Nginx as reverse proxy within Docker
 setup_ssl() {
-    log "Setting up SSL with Certbot and Nginx..."
-
-    # Install Certbot
-    apt-get install -y certbot python3-certbot-nginx || error_exit "Failed to install Certbot."
-
-    # Prompt for domain name
-    read -p "Enter your domain name for SSL (e.g., example.com): " DOMAIN_NAME
-
-    # Prompt for email address
-    read -p "Enter your email address for SSL notifications: " EMAIL_ADDRESS
-
-    # Obtain SSL certificates
-    certbot --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos -m "$EMAIL_ADDRESS" || error_exit "Failed to obtain SSL certificates."
-
-    # Configure Nginx as a reverse proxy with SSL
-    create_dir "$NGINX_CONF_DIR"
-
-    cat > "$NGINX_CONF_FILE" <<EOF
-server {
-    listen 80;
-    server_name $DOMAIN_NAME;
-
-    location / {
-        return 301 https://\$host\$request_uri;
-    }
-}
-
-server {
-    listen 443 ssl;
-    server_name $DOMAIN_NAME;
-
-    ssl_certificate /etc/letsencrypt/live/$DOMAIN_NAME/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/$DOMAIN_NAME/privkey.pem;
-
-    ssl_protocols       TLSv1.2 TLSv1.3;
-    ssl_ciphers         HIGH:!aNULL:!MD5;
-
-    location /admin/ {
-        proxy_pass http://node-red:1880/admin/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-
-    location /api/ {
-        proxy_pass http://node-red:1880/api/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-
-    location /ui/ {
-        proxy_pass http://node-red:1880/ui/;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-    }
-
-    # Additional location blocks as needed
-}
-EOF
-
-    # Reload Nginx to apply changes
-    systemctl reload nginx || error_exit "Failed to reload Nginx."
-
-    log "Configured Nginx as a reverse proxy with SSL."
+    # Removed host-based SSL setup to avoid conflict with Docker's Nginx
+    # SSL is now managed within Docker using the certbot service in docker-compose.yml
+    log "SSL setup is now managed within Docker. No action needed here."
 }
 
 # Function to create configuration flows for the web interface
@@ -1588,11 +1549,12 @@ This setup script automates the installation and configuration of a Node-RED env
     ```
 
 2. **Provide Required Inputs**:
-    - **Admin Password**: When prompted, enter a strong password for Node-RED admin access.
-    - **GitHub Token**: Enter your GitHub token for committing code.
-    - **Slack Token**: Enter your Slack token for notifications.
+    - **Docker Hub Username**: Enter your Docker Hub username when prompted.
+    - **Remote Server User**: Enter the username for your remote server.
+    - **Remote Server IP**: Enter the IP address of your remote server.
     - **Domain Name**: Provide your domain name for SSL setup.
     - **Email Address**: Enter your email address for SSL notifications.
+    - **Deployment Path**: Enter the deployment path on your remote server (e.g., `/var/www/node-red-automation`).
 
 3. **Edit `.env` File**:
     Replace all placeholders with your actual credentials.
@@ -1613,11 +1575,8 @@ This setup script automates the installation and configuration of a Node-RED env
     sudo docker-compose ps
     ```
 
-7. **Setup SSL (if not done automatically)**:
-    The script attempts to set up SSL automatically. If you encounter issues, you can manually run:
-    ```bash
-    sudo certbot --nginx
-    ```
+7. **Setup SSL (Managed Within Docker)**:
+    The script integrates Certbot as a Docker service to manage SSL certificates automatically. No manual action is required. If you encounter issues, ensure that ports 80 and 443 are open and that your domain DNS is correctly configured.
 
 ## Maintenance
 
@@ -1662,13 +1621,13 @@ This setup script automates the installation and configuration of a Node-RED env
 
 - **SSL Certificate Issues**: Renew certificates using Certbot.
     ```bash
-    sudo certbot renew
+    sudo docker-compose run certbot certonly
     ```
 
 ## Security Considerations
 
 - **Admin Password**: Ensure the admin password for Node-RED is strong and kept confidential.
-- **Secure Communications**: SSL/TLS is enabled via Nginx to encrypt data in transit.
+- **Secure Communications**: SSL/TLS is enabled via Docker's Nginx to encrypt data in transit.
 - **Secrets Management**: Sensitive information is managed using Docker secrets.
 - **Regular Updates**: Keep all dependencies and Docker images up-to-date.
 - **Monitor Logs**: Regularly monitor system and application logs for unauthorized access attempts.
@@ -1697,6 +1656,7 @@ print_completion() {
 
 # Initial checks
 check_sudo
+prompt_inputs  # Prompt for dynamic inputs
 check_node_npm
 check_node_version
 create_dir "$PROJECT_DIR"
