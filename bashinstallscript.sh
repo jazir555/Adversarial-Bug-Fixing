@@ -1025,7 +1025,6 @@ backups/
 # Testing
 /tests/
 
-# Monitoring
 /monitoring/
 
 /subflows/
