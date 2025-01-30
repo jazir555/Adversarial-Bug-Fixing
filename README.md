@@ -1,1 +1,1 @@
-# NodeRed Automation to automatically bug check code using adversarial checking via multiple chatbots.
+# NodeRed Automation to automatically bug check code using adversarial testing via multiple chatbots.
