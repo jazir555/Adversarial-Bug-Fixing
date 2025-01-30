@@ -17,21 +17,22 @@ set -e
 # Variables
 # =============================================================================
 
-PROJECT_DIR="node-red-automation"
-LOG_FILE="setup.log"
-ENV_FILE=".env"
-README_FILE="README.md"
-GITIGNORE_FILE=".gitignore"
-PACKAGE_JSON_FILE="package.json"
-FLOW_DIR="flows"
-CONFIG_DIR="config"
-SRC_DIR="src"
-DOCKERFILE="Dockerfile"
-DOCKER_COMPOSE_FILE="docker-compose.yml"
-CI_CD_YML=".github/workflows/ci-cd.yml"
-TEST_DIR="tests"
-SUBFLOWS_DIR="subflows"
-BACKUP_DIR="backups"
+PROJECT_DIR="$(pwd)/node-red-automation"
+LOG_FILE="$PROJECT_DIR/setup.log"
+ENV_FILE="$PROJECT_DIR/.env"
+README_FILE="$PROJECT_DIR/README.md"
+GITIGNORE_FILE="$PROJECT_DIR/.gitignore"
+PACKAGE_JSON_FILE="$PROJECT_DIR/package.json"
+FLOW_DIR="$PROJECT_DIR/flows"
+CONFIG_DIR="$PROJECT_DIR/config"
+SRC_DIR="$PROJECT_DIR/src"
+DOCKERFILE="$PROJECT_DIR/Dockerfile"
+DOCKER_COMPOSE_FILE="$PROJECT_DIR/docker-compose.yml"
+CI_CD_YML="$PROJECT_DIR/.github/workflows/ci-cd.yml"
+TEST_DIR="$PROJECT_DIR/tests"
+SUBFLOWS_DIR="$PROJECT_DIR/subflows"
+BACKUP_DIR="$PROJECT_DIR/backups"
+MONITORING_DIR="$PROJECT_DIR/monitoring"
 
 # =============================================================================
 # Function Definitions
@@ -66,6 +67,8 @@ create_dir() {
 # Function to initialize npm and install dependencies
 init_npm() {
     if [ ! -f "$PACKAGE_JSON_FILE" ]; then
+        log "Initializing npm in $PROJECT_DIR..."
+        cd "$PROJECT_DIR"
         npm init -y || error_exit "npm initialization failed."
         log "Initialized npm in $PROJECT_DIR."
     else
@@ -74,6 +77,7 @@ init_npm() {
 
     # Install necessary packages
     log "Installing npm dependencies..."
+    cd "$PROJECT_DIR"
     npm install node-red dotenv node-red-node-email node-red-node-slack node-red-contrib-github language-detect diff nodemailer jest mocha --save || error_exit "npm install failed."
     log "npm dependencies installed successfully."
 }
@@ -176,7 +180,7 @@ create_flow_json() {
         "z": "flow",
         "name": "Schedule Trigger",
         "props": [],
-        "repeat": "1800",  // Trigger every 30 minutes
+        "repeat": "1800",
         "crontab": "",
         "once": true,
         "topic": "",
@@ -638,10 +642,10 @@ return msg;
         "z": "flow",
         "name": "Finalization",
         "func": `
-// Placeholder for any finalization steps if needed
-// For example, resetting variables or logging
-return msg;
-`,
+    // Placeholder for any finalization steps if needed
+    // For example, resetting variables or logging
+    return msg;
+    `,
         "outputs": 1,
         "noerr": 0,
         "x": 1550,
@@ -779,9 +783,9 @@ EOF
 
 # Function to create Prometheus configuration
 create_prometheus_config() {
-    create_dir "monitoring"
+    create_dir "$MONITORING_DIR"
 
-    cat > "monitoring/prometheus.yml" <<'EOF'
+    cat > "$MONITORING_DIR/prometheus.yml" <<'EOF'
 global:
   scrape_interval: 15s
 
@@ -860,23 +864,25 @@ EOF
 
 # Function to create Docker Compose start and stop scripts
 create_docker_commands() {
-    cat > "start-docker.sh" <<'EOF'
+    cat > "$PROJECT_DIR/start-docker.sh" <<'EOF'
 #!/bin/bash
 docker-compose up -d
 EOF
 
-    cat > "stop-docker.sh" <<'EOF'
+    cat > "$PROJECT_DIR/stop-docker.sh" <<'EOF'
 #!/bin/bash
 docker-compose down
 EOF
 
-    chmod +x start-docker.sh stop-docker.sh
+    chmod +x "$PROJECT_DIR/start-docker.sh" "$PROJECT_DIR/stop-docker.sh"
     log "Created Docker Compose start and stop scripts."
 }
 
 # Function to create Prometheus and Grafana setup scripts
 create_monitoring_setup() {
-    cat > "monitoring/setup-monitoring.sh" <<'EOF'
+    create_dir "$MONITORING_DIR"
+
+    cat > "$MONITORING_DIR/setup-monitoring.sh" <<'EOF'
 #!/bin/bash
 
 # Start Prometheus and Grafana using Docker Compose
@@ -886,7 +892,7 @@ echo "Prometheus is available at http://localhost:9090"
 echo "Grafana is available at http://localhost:3000 (default login: admin/admin)"
 EOF
 
-    chmod +x monitoring/setup-monitoring.sh
+    chmod +x "$MONITORING_DIR/setup-monitoring.sh"
     log "Created monitoring setup script."
 }
 
@@ -986,7 +992,7 @@ EOF
 
     # Add cron job (runs daily at 2 AM)
     CRON_JOB="0 2 * * * $(pwd)/$BACKUP_DIR/backup.sh"
-    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+    (crontab -l 2>/dev/null | grep -v "$(pwd)/$BACKUP_DIR/backup.sh"; echo "$CRON_JOB") | crontab -
     log "Set up automated backups with cron."
 }
 
@@ -1037,27 +1043,36 @@ EOF
     # For Node-RED editor access, consider setting up HTTPS.
 
     # 3. Access Controls
-    SETTINGS_FILE="$FLOW_DIR/settings.js"
+    # Locate the Node-RED settings.js file. By default, it's in ~/.node-red/
+    SETTINGS_DIR="$PROJECT_DIR/config"
+    SETTINGS_FILE="$SETTINGS_DIR/settings.js"
+
+    create_dir "$SETTINGS_DIR"
 
     if [ ! -f "$SETTINGS_FILE" ]; then
-        cp "$FLOW_DIR/settings.js.sample" "$SETTINGS_FILE" || error_exit "Failed to copy settings.js.sample to settings.js."
-        log "Copied settings.js.sample to settings.js."
+        cp "$(npm root -g)/node-red/settings.js" "$SETTINGS_FILE" || error_exit "Failed to copy default settings.js."
+        log "Copied default settings.js to $SETTINGS_FILE."
+    else
+        log "settings.js already exists at $SETTINGS_FILE. Skipping copy."
     fi
 
-    # Append adminAuth configuration
-    cat >> "$SETTINGS_FILE" <<'EOF'
+    # Append adminAuth configuration if not already present
+    if ! grep -q "adminAuth" "$SETTINGS_FILE"; then
+        cat >> "$SETTINGS_FILE" <<'EOF'
 
 adminAuth: {
     type: "credentials",
     users: [{
         username: "admin",
-        password: "$2a$08$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // bcrypt hash of your password
+        password: "$2a$08$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // Replace with your bcrypt hash
         permissions: "*"
     }]
 },
 EOF
-
-    log "Configured Node-RED access controls in settings.js."
+        log "Configured Node-RED access controls in settings.js."
+    else
+        log "adminAuth already configured in settings.js. Skipping."
+    fi
 }
 
 # Function to create README.md with detailed setup instructions
