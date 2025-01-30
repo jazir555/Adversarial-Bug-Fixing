@@ -3,8 +3,8 @@
 # =============================================================================
 # Script Name: setup-node-red-automation.sh
 # Description: Automates the initial environment setup for Node-RED Automation.
-#              Installs dependencies, Docker, Docker Compose, and configures
-#              security measures.
+#              Installs dependencies, Docker, Docker Compose, configures
+#              security measures, sets up configurations, and prepares the environment.
 # Author: Your Name
 # License: MIT
 # =============================================================================
@@ -703,6 +703,11 @@ services:
       - ./tests:/data/tests
       - node-red-data:/data
     restart: unless-stopped
+    secrets:
+      - github_token
+      - slack_token
+    security_opt:
+      - no-new-privileges:true
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:1880/health"]
       interval: 1m30s
@@ -739,11 +744,17 @@ services:
       timeout: 10s
       retries: 3
 
+secrets:
+  github_token:
+    file: ./secrets/github_token.txt
+  slack_token:
+    file: ./secrets/slack_token.txt
+
 volumes:
   node-red-data:
   grafana-data:
 EOF
-    log "Created docker-compose.yml with container orchestration and health checks."
+    log "Created docker-compose.yml with container orchestration, secrets, and health checks."
 }
 
 # Function to create Prometheus configuration with provisioning
@@ -956,6 +967,109 @@ EOF
     log "Created Docker Compose start and stop scripts."
 }
 
+# Function to create Prometheus and Grafana setup scripts
+create_monitoring_setup() {
+    create_dir "$MONITORING_DIR"
+
+    # Prometheus setup already handled in create_prometheus_config
+
+    # Grafana provisioning
+    create_grafana_provisioning
+
+    cat > "$MONITORING_DIR/setup-monitoring.sh" <<'EOF'
+#!/bin/bash
+
+# Start Prometheus and Grafana using Docker Compose
+docker-compose up -d prometheus grafana
+
+echo "Prometheus is available at http://localhost:9090"
+echo "Grafana is available at http://localhost:3000 (default login: admin/admin)"
+EOF
+
+    chmod +x "$MONITORING_DIR/setup-monitoring.sh"
+    log "Created monitoring setup script."
+}
+
+# Function to create test scripts using Jest and Mocha
+create_test_scripts() {
+    create_dir "$TEST_DIR"
+
+    # Expanded Jest test
+    cat > "$TEST_DIR/sample.test.js" <<'EOF'
+const sum = (a, b) => a + b;
+
+test('adds 1 + 2 to equal 3', () => {
+    expect(sum(1, 2)).toBe(3);
+});
+
+// Add more Jest tests here
+EOF
+
+    # Expanded Mocha test
+    cat > "$TEST_DIR/sample.spec.js" <<'EOF'
+const assert = require('assert');
+
+describe('Array', function() {
+    describe('#indexOf()', function() {
+        it('should return -1 when the value is not present', function() {
+            assert.strictEqual([1,2,3].indexOf(4), -1);
+        });
+    });
+});
+
+// Add more Mocha tests here
+EOF
+
+    log "Created expanded test scripts for Jest and Mocha."
+}
+
+# Function to create subflows for reusability
+create_subflows() {
+    create_dir "$SUBFLOWS_DIR"
+
+    # Sample Subflow: API Request Handler
+    cat > "$SUBFLOWS_DIR/api-request-handler.json" <<'EOF'
+{
+    "id": "api-request-handler",
+    "type": "subflow",
+    "name": "API Request Handler",
+    "info": "Handles API requests with rate limiting and error handling.",
+    "category": "function",
+    "in": [
+        {
+            "x": 40,
+            "y": 40,
+            "wires": []
+        }
+    ],
+    "out": [
+        {
+            "x": 480,
+            "y": 40,
+            "wires": []
+        }
+    ],
+    "env": [
+        {
+            "name": "API_RATE_LIMIT",
+            "type": "num",
+            "value": "5",
+            "required": true
+        },
+        {
+            "name": "TIME_WINDOW",
+            "type": "num",
+            "value": "60",
+            "required": true
+        }
+    ],
+    "color": "#a6bbcf"
+}
+EOF
+
+    log "Created sample subflow for API Request Handling."
+}
+
 # Function to create .gitignore with specified content
 create_gitignore() {
     if [ ! -f "$GITIGNORE_FILE" ]; then
@@ -981,6 +1095,7 @@ backups/
 # Monitoring
 /monitoring/
 
+# Subflows
 /subflows/
 
 # Configurations
@@ -1020,11 +1135,509 @@ EOF
     fi
 }
 
+# Function to set up automated backups using cron with error handling
+setup_automated_backups() {
+    create_dir "$BACKUP_DIR"
+
+    cat > "$BACKUP_DIR/backup.sh" <<'EOF'
+#!/bin/bash
+
+# Directory to backup
+SOURCE_DIR="/absolute/path/to/node-red-automation" # This will be replaced by the script
+BACKUP_DIR="/absolute/path/to/node-red-automation/backups" # This will be replaced by the script
+TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+BACKUP_FILE="$BACKUP_DIR/backup_$TIMESTAMP.tar.gz"
+
+# Check if source directory exists
+if [ ! -d "$SOURCE_DIR" ]; then
+  echo "Error: Source directory missing" >&2
+  exit 1
+fi
+
+# Create backup
+tar -czf "$BACKUP_FILE" "$SOURCE_DIR"
+
+# Verify backup integrity
+tar -tzf "$BACKUP_FILE" > /dev/null
+if [ $? -ne 0 ]; then
+    echo "Backup verification failed for $BACKUP_FILE" >&2
+    exit 1
+fi
+
+# Remove backups older than 7 days
+find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
+
+echo "Backup created at $BACKUP_FILE and old backups removed."
+EOF
+
+    # Replace placeholders with actual absolute paths
+    sed -i "s|/absolute/path/to/node-red-automation|$PROJECT_DIR|g" "$BACKUP_DIR/backup.sh" || error_exit "Failed to set absolute paths in backup.sh."
+
+    chmod +x "$BACKUP_DIR/backup.sh"
+
+    # Define absolute cron job path
+    CRON_JOB="0 2 * * * $BACKUP_DIR/backup.sh"
+
+    # Check if the cron job already exists to avoid duplicates
+    crontab -l 2>/dev/null | grep -F "$BACKUP_DIR/backup.sh" >/dev/null
+    if [ $? -ne 0 ]; then
+        (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+        log "Added backup cron job."
+    else
+        log "Backup cron job already exists. Skipping addition."
+    fi
+}
+
+# Function to implement security enhancements
+implement_security() {
+    # 1. API Rate Limiting: Ensure rate-limiter subflow is included in flows.json
+    # Assuming rate-limiter subflow is already created in subflows directory
+
+    # 2. Firewall Setup with UFW
+    setup_firewall
+
+    # 3. Docker Security Best Practices
+    secure_docker
+    secure_docker_containers
+
+    # 4. Secrets Management using Docker Secrets
+    setup_docker_secrets
+
+    # 5. Data Encryption: Handled via Nginx as a reverse proxy with SSL
+    setup_ssl
+
+    log "Implemented security enhancements."
+}
+
+# Function to setup firewall using UFW
+setup_firewall() {
+    log "Configuring UFW firewall..."
+
+    # Allow SSH
+    ufw allow 22/tcp
+
+    # Allow HTTP and HTTPS
+    ufw allow 80/tcp
+    ufw allow 443/tcp
+
+    # Allow Prometheus and Grafana
+    ufw allow 9090/tcp
+    ufw allow 3000/tcp
+
+    # Allow Node-RED port if accessed directly (optional)
+    ufw allow "$NODE_RED_PORT"/tcp
+
+    # Enable UFW
+    ufw --force enable
+
+    log "Firewall configured and UFW enabled."
+}
+
+# Function to secure Docker by adding the current user to the docker group
+secure_docker() {
+    log "Securing Docker..."
+
+    # Create docker group if it doesn't exist
+    groupadd docker || log "Docker group already exists."
+
+    # Add current user to docker group
+    usermod -aG docker "$SUDO_USER"
+
+    log "Added user $SUDO_USER to the docker group."
+}
+
+# Function to setup Docker secrets for sensitive information
+setup_docker_secrets() {
+    create_dir "$PROJECT_DIR/secrets"
+
+    # Example: Create GitHub Token secret
+    read -sp "Enter your GitHub Token for Docker Secrets: " GITHUB_SECRET
+    echo "$GITHUB_SECRET" > "$PROJECT_DIR/secrets/github_token.txt"
+    chmod 600 "$PROJECT_DIR/secrets/github_token.txt"
+
+    # Similarly, create other secrets as needed
+    read -sp "Enter your Slack Token for Docker Secrets: " SLACK_SECRET
+    echo "$SLACK_SECRET" > "$PROJECT_DIR/secrets/slack_token.txt"
+    chmod 600 "$PROJECT_DIR/secrets/slack_token.txt"
+
+    log "Docker secrets set up."
+}
+
+# Function to secure Docker containers
+secure_docker_containers() {
+    # Ensure containers run with least privilege by adding security options in docker-compose.yml
+    # This was already partially handled in create_docker_compose()
+
+    # Example: Add security_opt and no-new-privileges to each service if not already present
+    # For demonstration, ensuring it's present for node-red
+    sed -i '/node-red:/a\ \ security_opt:\n\ \ \ \ - no-new-privileges:true' "$DOCKER_COMPOSE_FILE"
+
+    log "Applied Docker security best practices."
+}
+
+# Function to setup SSL using Certbot and Nginx as reverse proxy
+setup_ssl() {
+    log "Setting up SSL with Certbot and Nginx..."
+
+    # Install Certbot
+    apt-get install -y certbot python3-certbot-nginx || error_exit "Failed to install Certbot."
+
+    # Prompt for domain name
+    read -p "Enter your domain name for SSL (e.g., example.com): " DOMAIN_NAME
+
+    # Obtain SSL certificates
+    certbot certonly --nginx -d "$DOMAIN_NAME" --non-interactive --agree-tos -m your-email@example.com || error_exit "Failed to obtain SSL certificates."
+
+    # Configure Nginx as a reverse proxy with SSL
+    create_dir "$NGINX_CONF_DIR"
+
+    cat > "$NGINX_CONF_FILE" <<EOF
+server {
+    listen 80;
+    server_name $DOMAIN_NAME;
+
+    location / {
+        return 301 https://\$host\$request_uri;
+    }
+}
+
+server {
+    listen 443 ssl;
+    server_name $DOMAIN_NAME;
+
+    ssl_certificate /etc/nginx/ssl/fullchain.pem;
+    ssl_certificate_key /etc/nginx/ssl/privkey.pem;
+
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_ciphers         HIGH:!aNULL:!MD5;
+
+    location /admin/ {
+        proxy_pass http://node-red:1880/admin/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+
+    location /api/ {
+        proxy_pass http://node-red:1880/api/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+
+    location /ui/ {
+        proxy_pass http://node-red:1880/ui/;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+    }
+
+    # Additional location blocks as needed
+}
+EOF
+
+    log "Configured Nginx as a reverse proxy with SSL."
+}
+
+# Function to create configuration flows for the web interface
+create_configuration_flows() {
+    cat > "$PROJECT_DIR/configuration_flows.json" <<'EOF'
+[
+    {
+        "id": "config-ui",
+        "type": "tab",
+        "label": "Configuration UI",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "ui_form",
+        "type": "ui_form",
+        "z": "config-ui",
+        "name": "Configuration Form",
+        "label": "Configure Bug Checking",
+        "group": "dashboard_group",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "options": [
+            {
+                "label": "Prompts (JSON Array)",
+                "value": "PROMPTS",
+                "type": "textarea",
+                "required": true,
+                "rows": 6,
+                "cols": 50,
+                "placeholder": "Enter prompts as a JSON array"
+            },
+            {
+                "label": "GitHub Filename",
+                "value": "INITIAL_CODE_FILE",
+                "type": "text",
+                "required": true,
+                "placeholder": "e.g., src/main.py"
+            },
+            {
+                "label": "Finalized Filename",
+                "value": "FINALIZED_CODE_FILE",
+                "type": "text",
+                "required": true,
+                "placeholder": "e.g., src/main_final.py"
+            },
+            {
+                "label": "Processing Range Start (Line)",
+                "value": "PROCESSING_RANGE_START",
+                "type": "number",
+                "required": true,
+                "placeholder": "e.g., 2000"
+            },
+            {
+                "label": "Range Increment (Lines)",
+                "value": "RANGE_INCREMENT",
+                "type": "number",
+                "required": true,
+                "placeholder": "e.g., 2000"
+            },
+            {
+                "label": "Max Iterations per Chatbot",
+                "value": "MAX_ITERATIONS_PER_CHATBOT",
+                "type": "number",
+                "required": true,
+                "placeholder": "e.g., 5"
+            }
+        ],
+        "formValue": {},
+        "payload": "payload",
+        "topic": "config_update",
+        "x": 200,
+        "y": 100,
+        "wires": [
+            [
+                "save_config"
+            ]
+        ]
+    },
+    {
+        "id": "save_config",
+        "type": "file",
+        "z": "config-ui",
+        "name": "Save Config",
+        "filename": "/data/config/config.json",
+        "appendNewline": false,
+        "createDir": false,
+        "overwriteFile": "true",
+        "encoding": "utf8",
+        "x": 500,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "load_config",
+        "type": "inject",
+        "z": "flow",
+        "name": "Load Config",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "topic": "",
+        "payloadType": "date",
+        "x": 200,
+        "y": 200,
+        "wires": [
+            [
+                "read_config"
+            ]
+        ]
+    },
+    {
+        "id": "read_config",
+        "type": "file in",
+        "z": "flow",
+        "name": "Read Config",
+        "filename": "/data/config/config.json",
+        "format": "utf8",
+        "sendError": false,
+        "x": 400,
+        "y": 200,
+        "wires": [
+            [
+                "update_flow_context"
+            ]
+        ]
+    },
+    {
+        "id": "update_flow_context",
+        "type": "change",
+        "z": "flow",
+        "name": "Update Flow Context",
+        "rules": [
+            {
+                "t": "set",
+                "p": "flow.config",
+                "to": "payload",
+                "toType": "jsonata"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 600,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "ui_dashboard",
+        "type": "ui_group",
+        "z": "",
+        "name": "Dashboard",
+        "tab": "dashboard_tab",
+        "order": 1,
+        "disp": true,
+        "width": "6",
+        "collapse": false
+    },
+    {
+        "id": "dashboard_tab",
+        "type": "ui_tab",
+        "z": "",
+        "name": "Configuration",
+        "icon": "dashboard",
+        "order": 1
+    }
+]
+EOF
+    log "Created configuration_flows.json for the web interface."
+}
+
+# Function to create README with comprehensive documentation
+create_readme() {
+    cat > "$README_FILE" <<'EOF'
+# Node-RED Automation Setup
+
+## Overview
+
+This setup script automates the installation and configuration of a Node-RED environment tailored for AI-driven code analysis and deployment automation. It integrates GitHub, Slack, email notifications, Dockerization, CI/CD pipelines, monitoring, testing, security enhancements, and a web-based configuration interface.
+
+## Prerequisites
+
+- **Operating System**: Ubuntu 20.04/22.04 LTS
+- **Node.js**: v16.x
+- **npm**
+- **sudo/root privileges**
+- **Domain Name**: For SSL certificate setup
+
+## Setup Steps
+
+1. **Run the Setup Script**:
+    ```bash
+    sudo chmod +x setup-node-red-automation.sh
+    sudo ./setup-node-red-automation.sh
+    ```
+
+2. **Edit `.env` File**:
+    Replace all placeholders with your actual credentials.
+    ```bash
+    sudo nano node-red-automation/.env
+    ```
+
+3. **Start Docker Compose Services**:
+    ```bash
+    sudo docker-compose up -d
+    ```
+
+4. **Access Node-RED Dashboard**:
+    Navigate to [https://yourdomain.com/ui](https://yourdomain.com/ui) in your browser.
+
+5. **Verify Services**:
+    ```bash
+    sudo docker-compose ps
+    ```
+
+6. **Setup SSL (if not done automatically)**:
+    Follow Certbot prompts or rerun SSL setup if necessary.
+
+## Maintenance
+
+- **Updating Services**:
+    ```bash
+    sudo docker-compose pull
+    sudo docker-compose up -d
+    ```
+
+- **Viewing Logs**:
+    ```bash
+    sudo docker-compose logs -f
+    ```
+
+- **Stopping Services**:
+    ```bash
+    sudo docker-compose down
+    ```
+
+- **Backup Restoration**:
+    To restore from a backup:
+    ```bash
+    tar -xzf backup_filename.tar.gz -C /path/to/node-red-automation
+    ```
+
+## Troubleshooting
+
+- **Docker Issues**: Ensure Docker service is running.
+    ```bash
+    sudo systemctl status docker
+    ```
+
+- **Node-RED Access**: Check if Node-RED container is up and listening on the specified port.
+    ```bash
+    sudo docker-compose ps
+    ```
+
+- **Firewall Issues**: Verify UFW rules.
+    ```bash
+    sudo ufw status
+    ```
+
+- **SSL Certificate Issues**: Renew certificates using Certbot.
+    ```bash
+    sudo certbot renew
+    ```
+
+## Security Considerations
+
+- **Admin Password**: Ensure the admin password for Node-RED is strong and kept confidential.
+- **Secure Communications**: SSL/TLS is enabled via Nginx to encrypt data in transit.
+- **Secrets Management**: Sensitive information is managed using Docker secrets.
+- **Regular Updates**: Keep all dependencies and Docker images up-to-date.
+- **Monitor Logs**: Regularly monitor system and application logs for unauthorized access attempts.
+
+## License
+
+MIT License
+EOF
+    log "Created README with comprehensive documentation."
+}
+
+# Function to print completion message
+print_completion() {
+    echo "===================================================="
+    echo "Node-RED Automation setup completed successfully."
+    echo "Navigate to the project directory: $PROJECT_DIR"
+    echo "Run './start-docker.sh' to start all services."
+    echo "Run './stop-docker.sh' to stop all services."
+    echo "Access Node-RED Dashboard at https://yourdomain.com/ui"
+    echo "===================================================="
+}
+
 # =============================================================================
 # Execution Flow
 # =============================================================================
 
 # Initial checks
+check_sudo
 check_node_npm
 check_node_version
 create_dir "$PROJECT_DIR"
@@ -1063,8 +1676,9 @@ create_monitoring_setup
 create_test_scripts
 create_subflows
 
+# Dashboard and Configuration Flows
+create_configuration_flows
+
 # Finalization
 create_readme
-
-log "Initial environment setup completed successfully."
-
+print_completion
