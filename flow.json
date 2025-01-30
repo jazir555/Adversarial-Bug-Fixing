@@ -1,0 +1,554 @@
+
+### **Detailed Explanation:**
+
+1. **Environment Variables for Multiple Chatbots:**
+   - The `.env` file now includes configurations for two chatbots (`CHATBOT_A_API_URL`, `CHATBOT_A_API_KEY`, `CHATBOT_B_API_URL`, `CHATBOT_B_API_KEY`).
+
+2. **Processing Configuration:**
+   - Defined initial and finalized code file paths (`INITIAL_CODE_FILE`, `FINALIZED_CODE_FILE`).
+   - Configured processing ranges and iteration counts (`PROCESSING_RANGE_START`, `PROCESSING_RANGE_END`, `RANGE_INCREMENT`, `MAX_ITERATIONS_PER_CHATBOT`).
+
+3. **Project Structure:**
+   - Created `src/` for source code files.
+   - Added a `.gitignore` to exclude sensitive files and directories from version control.
+
+4. **Dependency Installation:**
+   - Installed all necessary Node.js packages, including `nodemailer` for email notifications.
+
+5. **Documentation:**
+   - The `README.md` provides clear setup instructions and an overview of the project structure.
+
+6. **Security Enhancements:**
+   - Utilized a `.env` file to manage sensitive configurations securely.
+   - Ensured the `.env` file is excluded from version control.
+
+---
+
+## **2. Enhanced Node-RED `flow.json` Configuration**
+
+The `flow.json` below orchestrates the entire automation process, including dynamic range selection, iterative chatbot interactions, GitHub integration, and robust error handling. Each node is annotated with comments for clarity.
+
+```json
+[
+    {
+        "id": "schedule-trigger",
+        "type": "inject",
+        "z": "flow",
+        "name": "Schedule Trigger",
+        "props": [],
+        "repeat": "1800",  // Trigger every 30 minutes
+        "crontab": "",
+        "once": true,
+        "topic": "",
+        "x": 150,
+        "y": 100,
+        "wires": [
+            [
+                "config-loader"
+            ]
+        ]
+    },
+    {
+        "id": "config-loader",
+        "type": "change",
+        "z": "flow",
+        "name": "Load Configuration",
+        "rules": [
+            {
+                "t": "set",
+                "p": "github_repo",
+                "to": "$.env.GITHUB_REPO",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "github_token",
+                "to": "$.env.GITHUB_TOKEN",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "initial_code_file",
+                "to": "$.env.INITIAL_CODE_FILE",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "finalized_code_file",
+                "to": "$.env.FINALIZED_CODE_FILE",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "processing_range_start",
+                "to": "$.env.PROCESSING_RANGE_START",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "processing_range_end",
+                "to": "$.env.PROCESSING_RANGE_END",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "range_increment",
+                "to": "$.env.RANGE_INCREMENT",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "max_iterations_per_chatbot",
+                "to": "$.env.MAX_ITERATIONS_PER_CHATBOT",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "openai_api_key",
+                "to": "$.env.OPENAI_API_KEY",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "slack_channel",
+                "to": "$.env.SLACK_CHANNEL",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "slack_token",
+                "to": "$.env.SLACK_TOKEN",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "alert_email",
+                "to": "$.env.ALERT_EMAIL",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "smtp_server",
+                "to": "$.env.SMTP_SERVER",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "smtp_port",
+                "to": "$.env.SMTP_PORT",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "smtp_user",
+                "to": "$.env.SMTP_USER",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "smtp_pass",
+                "to": "$.env.SMTP_PASS",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "chatbot_a_api_url",
+                "to": "$.env.CHATBOT_A_API_URL",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "chatbot_a_api_key",
+                "to": "$.env.CHATBOT_A_API_KEY",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "chatbot_b_api_url",
+                "to": "$.env.CHATBOT_B_API_URL",
+                "toType": "env"
+            },
+            {
+                "t": "set",
+                "p": "chatbot_b_api_key",
+                "to": "$.env.CHATBOT_B_API_KEY",
+                "toType": "env"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 350,
+        "y": 100,
+        "wires": [
+            [
+                "code-extractor"
+            ]
+        ]
+    },
+    {
+        "id": "code-extractor",
+        "type": "function",
+        "z": "flow",
+        "name": "Code Extractor",
+        "func": "const fs = require('fs');\n\nconst start = parseInt(msg.processing_range_start, 10);\nconst end = parseInt(msg.processing_range_end, 10);\nconst increment = parseInt(msg.range_increment, 10);\nconst codeFile = msg.initial_code_file;\n\ntry {\n    const code = fs.readFileSync(codeFile, 'utf8');\n    const lines = code.split('\\n');\n    \n    // Initialize ranges array\n    msg.ranges = [];\n    let currentStart = start;\n    let currentEnd = end;\n\n    while (currentStart < lines.length) {\n        let adjustedStart = currentStart;\n        let adjustedEnd = currentEnd;\n        \n        // Adjust start to include full function\n        while (adjustedStart > 0 && !/\\b(def |class |async def )/.test(lines[adjustedStart - 1])) {\n            adjustedStart--;\n        }\n        \n        // Adjust end to include full function\n        while (adjustedEnd < lines.length && !/\\b(return|raise |except |finally:)/.test(lines[adjustedEnd])) {\n            adjustedEnd++;\n        }\n        \n        // Push the adjusted range\n        msg.ranges.push({ start: adjustedStart, end: adjustedEnd });\n\n        // Increment for next range\n        currentStart += increment;\n        currentEnd += increment;\n    }\n\n    // Initialize range processing index\n    msg.current_range_index = 0;\n\n    return msg;\n} catch (err) {\n    msg.error = 'Code extraction failed: ' + err.message;\n    return [null, msg];\n}",
+        "outputs": 2,
+        "noerr": 0,
+        "x": 550,
+        "y": 100,
+        "wires": [
+            [
+                "range-iterator"
+            ],
+            [
+                "error-handler"
+            ]
+        ]
+    },
+    {
+        "id": "range-iterator",
+        "type": "function",
+        "z": "flow",
+        "name": "Range Iterator",
+        "func": `
+    if (msg.current_range_index < msg.ranges.length) {
+        const currentRange = msg.ranges[msg.current_range_index];
+        msg.current_range = currentRange;
+        
+        // Extract code chunk based on current range
+        const fs = require('fs');
+        const code = fs.readFileSync(msg.initial_code_file, 'utf8');
+        const lines = code.split('\\n');
+        const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');
+        
+        msg.code_chunk = codeChunk;
+        msg.iteration = 0;
+        msg.max_iterations = parseInt(msg.max_iterations_per_chatbot, 10) * msg.chatbots.length;
+        msg.chatbots = [
+            { name: "Chatbot A", api_url: msg.chatbot_a_api_url, api_key: msg.chatbot_a_api_key },
+            { name: "Chatbot B", api_url: msg.chatbot_b_api_url, api_key: msg.chatbot_b_api_key }
+        ];
+        msg.current_chatbot_index = 0;
+        
+        return msg;
+    } else {
+        // All ranges processed
+        return [msg, null];
+    }
+    `,
+        "outputs": 2,
+        "noerr": 0,
+        "x": 750,
+        "y": 100,
+        "wires": [
+            [
+                "prompt-engine"
+            ],
+            [
+                "finalization"
+            ]
+        ]
+    },
+    {
+        "id": "prompt-engine",
+        "type": "function",
+        "z": "flow",
+        "name": "Prompt Engine",
+        "func": `
+    const prompts = [
+        'Check this code for errors, make sure it is bug free, add any functionality you think is important.',
+        'Identify all logic flaws.',
+        'Optimize performance bottlenecks.',
+        'Enhance security best practices.',
+        'Refactor redundant code.',
+        'Check compliance with coding standards.'
+    ];
+    
+    const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+    msg.prompt = \`\${randomPrompt}\\n\\n\${msg.language || 'Python'} code:\\n\${msg.code_chunk}\\n\\nContext:\\n\${msg.context || ''}\`;
+    return msg;
+    `,
+        "outputs": 1,
+        "noerr": 0,
+        "x": 950,
+        "y": 100,
+        "wires": [
+            [
+                "ai-gateway-configurator"
+            ]
+        ]
+    },
+    {
+        "id": "ai-gateway-configurator",
+        "type": "function",
+        "z": "flow",
+        "name": "AI Gateway Configurator",
+        "func": `
+    const chatbot = msg.chatbots[msg.current_chatbot_index % msg.chatbots.length];
+    
+    msg.url = chatbot.api_url;
+    msg.headers.Authorization = \`Bearer \${chatbot.api_key}\`;
+    msg.body = JSON.stringify({
+        model: "gpt-4",
+        messages: [
+            { role: "system", content: "You are a senior code reviewer." },
+            { role: "user", content: msg.prompt }
+        ]
+    });
+    
+    return msg;
+    `,
+        "outputs": 1,
+        "noerr": 0,
+        "x": 1150,
+        "y": 100,
+        "wires": [
+            [
+                "ai-gateway"
+            ]
+        ]
+    },
+    {
+        "id": "ai-gateway",
+        "type": "http request",
+        "z": "flow",
+        "name": "AI Chatbot Request",
+        "method": "POST",
+        "ret": "obj",
+        "url": "",
+        "tls": "",
+        "x": 1350,
+        "y": 100,
+        "wires": [
+            [
+                "ai-response-processor"
+            ],
+            [
+                "error-handler"
+            ]
+        ],
+        "headers": {
+            "Content-Type": "application/json",
+            "Authorization": ""
+        },
+        "property": "",
+        "body": ""
+    },
+    {
+        "id": "ai-response-processor",
+        "type": "function",
+        "z": "flow",
+        "name": "AI Response Processor",
+        "func": `
+    const response = msg.payload;
+    let correctedCode = '';
+    
+    if (response && response.choices && response.choices.length > 0) {
+        correctedCode = response.choices[0].message.content.trim();
+    } else {
+        msg.error = 'Invalid response from AI chatbot.';
+        return [null, msg];
+    }
+    
+    msg.corrected_code = correctedCode;
+    
+    // Increment iteration count
+    msg.iteration += 1;
+    
+    // Update code chunk with corrected code
+    msg.code_chunk = correctedCode;
+    
+    // Alternate to next chatbot
+    msg.current_chatbot_index += 1;
+    
+    return msg;
+    `,
+        "outputs": 2,
+        "noerr": 0,
+        "x": 1550,
+        "y": 100,
+        "wires": [
+            [
+                "check-iterations"
+            ],
+            [
+                "error-handler"
+            ]
+        ]
+    },
+    {
+        "id": "check-iterations",
+        "type": "function",
+        "z": "flow",
+        "name": "Check Iterations",
+        "func": `
+    if (msg.iteration < msg.max_iterations) {
+        return msg;
+    } else {
+        return [null, msg];
+    }
+    `,
+        "outputs": 2,
+        "noerr": 0,
+        "x": 1750,
+        "y": 100,
+        "wires": [
+            [
+                "finalize-corrected-code"
+            ],
+            [
+                "range-iterator-increment"
+            ]
+        ]
+    },
+    {
+        "id": "finalize-corrected-code",
+        "type": "function",
+        "z": "flow",
+        "name": "Finalize Corrected Code",
+        "func": `
+    const fs = require('fs');
+    
+    const finalizedCode = msg.corrected_code;
+    const finalizedFile = msg.finalized_code_file;
+    
+    try {
+        fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');
+        msg.commit_message = "Automated Code Update: Finalized corrections for range " + msg.current_range.start + "-" + msg.current_range.end;
+        return msg;
+    } catch (err) {
+        msg.error = 'Finalization failed: ' + err.message;
+        return [null, msg];
+    }
+    `,
+        "outputs": 2,
+        "noerr": 0,
+        "x": 1950,
+        "y": 100,
+        "wires": [
+            [
+                "github-versioner"
+            ],
+            [
+                "error-handler"
+            ]
+        ]
+    },
+    {
+        "id": "github-versioner",
+        "type": "github",
+        "z": "flow",
+        "name": "Push to GitHub",
+        "repo": "{{github_repo}}",
+        "token": "{{github_token}}",
+        "operation": "commit",
+        "commitMessage": "{{commit_message}}",
+        "filePath": "{{finalized_code_file}}",
+        "fileContent": "{{corrected_code}}",
+        "branch": "main",
+        "x": 2150,
+        "y": 100,
+        "wires": [
+            [
+                "slack-notifier"
+            ],
+            [
+                "error-handler"
+            ]
+        ]
+    },
+    {
+        "id": "slack-notifier",
+        "type": "slack",
+        "z": "flow",
+        "name": "Slack Notification",
+        "token": "{{slack_token}}",
+        "channel": "{{slack_channel}}",
+        "message": "✅ *Code Update Successful*\nChanges have been committed to GitHub.\nFile: {{finalized_code_file}}",
+        "x": 2350,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "range-iterator-increment",
+        "type": "function",
+        "z": "flow",
+        "name": "Range Iterator Increment",
+        "func": `
+    msg.current_range_index += 1;
+    return msg;
+    `,
+        "outputs": 1,
+        "noerr": 0,
+        "x": 1750,
+        "y": 200,
+        "wires": [
+            [
+                "range-iterator"
+            ]
+        ]
+    },
+    {
+        "id": "finalization",
+        "type": "function",
+        "z": "flow",
+        "name": "Finalization",
+        "func": `
+    // Placeholder for any finalization steps if needed
+    // For example, resetting variables or logging
+    return msg;
+    `,
+        "outputs": 1,
+        "noerr": 0,
+        "x": 1550,
+        "y": 200,
+        "wires": [
+            [
+                "range-iterator-increment"
+            ]
+        ]
+    },
+    {
+        "id": "error-handler",
+        "type": "function",
+        "z": "flow",
+        "name": "Error Handler",
+        "func": `
+    const nodemailer = require('nodemailer');
+    
+    const transporter = nodemailer.createTransport({
+        host: msg.smtp_server,
+        port: parseInt(msg.smtp_port, 10),
+        secure: false, // true for 465, false for other ports
+        auth: {
+            user: msg.smtp_user,
+            pass: msg.smtp_pass
+        }
+    });
+    
+    const mailOptions = {
+        from: msg.smtp_user,
+        to: msg.alert_email,
+        subject: msg.subject || '🚨 AI Validation Failed',
+        text: msg.body || msg.error
+    };
+    
+    transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+            node.error('Failed to send error email: ' + error.message, msg);
+        } else {
+            node.log('Error email sent: ' + info.response);
+        }
+    });
+    
+    return null;
+    `,
+        "outputs": 0,
+        "noerr": 0,
+        "x": 1750,
+        "y": 300,
+        "wires": []
+    }
+]
