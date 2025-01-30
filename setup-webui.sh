@@ -295,29 +295,175 @@ $PROJECT_DIR/*.log {
 EOF
     log "Log rotation configured"
 }
+# -----------------------------------------------------------------------------
+# Configuration
+# -----------------------------------------------------------------------------
+declare -r PROJECT_DIR="${NODE_RED_DIR:-$(pwd)/node-red-automation}"
+declare -r LOG_FILE="$PROJECT_DIR/setup-webui.log"
+declare -r TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+declare -r BACKUP_DIR="$PROJECT_DIR/backups/$TIMESTAMP"
 
-# =============================================================================
-# Main Execution
-# =============================================================================
+# Dependency checks
+declare -a REQUIRED_CMDS=("docker" "docker-compose" "jq" "bcrypt")
+declare -a REQUIRED_FILES=("docker-compose.yml" "config/settings.js")
 
-# Initial checks
-check_sudo
-check_command docker
-check_command docker-compose
+# Security Settings
+declare -r DEFAULT_ADMIN_USER="admin"
+declare -A SECURE_DEFAULTS=(
+    [SESSION_TIMEOUT]="3600"
+    [API_RATE_LIMIT]="100/1h"
+    [PASSWORD_COMPLEXITY]="12"
+)
 
-# Create necessary directories
-create_dir "$PROJECT_DIR/config"
+# -----------------------------------------------------------------------------
+# Logging & Error Handling
+# -----------------------------------------------------------------------------
+init_logging() {
+    mkdir -p "$(dirname "$LOG_FILE")"
+    exec 3>&1 4>&2
+    exec > >(tee -a "$LOG_FILE") 2>&1
+}
 
-# Configure components
-configure_chatbot_subflow
-configure_webui_flows
-configure_dashboard_security
-apply_custom_styling
-deploy_ui_configurations
-setup_log_rotation
+log() {
+    local level=$1
+    local message=$2
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    echo -e "${timestamp} - [${level^^}] ${message}" | tee -a "$LOG_FILE"
+}
 
-log "Web UI Setup Completed Successfully"
-echo "===================================================="
-echo "Chatbot Configuration UI is now available at:"
-echo "http://your-server-ip:1880/ui"
-echo "===================================================="
+error_exit() {
+    log "error" "$1"
+    exit 1
+}
+
+# -----------------------------------------------------------------------------
+# Validation Functions
+# -----------------------------------------------------------------------------
+validate_environment() {
+    # Check required commands
+    for cmd in "${REQUIRED_CMDS[@]}"; do
+        if ! command -v "$cmd" &>/dev/null; then
+            error_exit "Missing required command: $cmd"
+        fi
+    done
+    
+    # Check project files
+    for file in "${REQUIRED_FILES[@]}"; do
+        [[ -f "$PROJECT_DIR/$file" ]] || error_exit "Missing required file: $file"
+    done
+
+    # Validate Docker daemon
+    docker info &>/dev/null || error_exit "Docker daemon unavailable"
+}
+
+# -----------------------------------------------------------------------------
+# Security Functions
+# -----------------------------------------------------------------------------
+generate_password_hash() {
+    local password=$1
+    local salt=$(openssl rand -base64 16)
+    docker run --rm node:alpine node -e "console.log(require('bcryptjs').hashSync(process.argv[1], 8));" "$password" | tr -d '\r\n'
+}
+
+configure_auth() {
+    log "info" "Configuring Enterprise Authentication System"
+    
+    # Generate random password if not set
+    if [[ -z "$ADMIN_PASSWORD" ]]; then
+        ADMIN_PASSWORD=$(openssl rand -base64 "${SECURE_DEFAULTS[PASSWORD_COMPLEXITY]}")
+        log "warning" "Generated admin password: $ADMIN_PASSWORD (store securely!)"
+    fi
+
+    local hash=$(generate_password_hash "$ADMIN_PASSWORD")
+    
+    # Update settings.js with auth configuration
+    jq --arg user "$DEFAULT_ADMIN_USER" --arg hash "$hash" \
+        '.adminAuth.users = [{
+            username: $user,
+            password: $hash,
+            permissions: "*"
+        }]' "$PROJECT_DIR/config/settings.js" > "$PROJECT_DIR/config/settings.tmp" \
+        && mv "$PROJECT_DIR/config/settings.tmp" "$PROJECT_DIR/config/settings.js"
+}
+# -----------------------------------------------------------------------------
+# Backup & Recovery
+# -----------------------------------------------------------------------------
+create_backup() {
+    local files=("$SETTINGS_FILE" "$CUSTOM_CSS_FILE")
+    mkdir -p "$BACKUP_DIR"
+    
+    for file in "${files[@]}"; do
+        if [[ -f "$file" ]]; then
+            cp "$file" "$BACKUP_DIR/$(basename "$file").bak"
+        fi
+    done
+    log "info" "Created configuration backup in $BACKUP_DIR"
+}
+# -----------------------------------------------------------------------------
+# UI Configuration
+# -----------------------------------------------------------------------------
+deploy_ui_components() {
+    log "info" "Deploying AI Chatbot Interface Components"
+    
+    # Dashboard template configuration
+    local dashboard_config=$(cat <<EOF
+{
+    "theme": "material",
+    "site": {
+        "name": "AI Chatbot Controller",
+        "favicon": "assets/chatbot-icon.png"
+    },
+    "auth": {
+        "type": "strategy",
+        "strategy": {
+            "name": "azuread",
+            "options": {
+                "clientID": "$AZURE_CLIENT_ID",
+                "tenantID": "$AZURE_TENANT_ID",
+                "redirectUrl": "$CALLBACK_URL"
+            }
+        }
+    }
+}
+EOF
+    )
+    echo "$dashboard_config" > "$PROJECT_DIR/config/ui-config.json"
+
+    # Apply cluster-safe storage
+    docker exec node-red-automation_node-red_1 mkdir -p /data/context
+    docker cp "$PROJECT_DIR/config/ui-config.json" node-red-automation_node-red_1:/data/context/
+}
+
+# -----------------------------------------------------------------------------
+# Main Execution Flow
+# -----------------------------------------------------------------------------
+main() {
+    init_logging
+    log "info" "Starting Enterprise WebUI Deployment"
+    
+    validate_environment
+    create_backup
+    configure_auth
+    deploy_ui_components
+    
+    if [[ "$HA_ENABLED" == "true" ]]; then
+        configure_ha
+    fi
+
+    log "info" "Restarting Node-RED Cluster"
+    docker-compose -f "$PROJECT_DIR/docker-compose.yml" up -d --scale node-red=3
+    
+    log "info" "Performing Post-Deployment Validation"
+    curl -sSf http://localhost:1880/health &>/dev/null || error_exit "Deployment validation failed"
+    
+    log "success" "Enterprise WebUI Deployment Completed"
+    log "warning" "Admin Password: ${ADMIN_PASSWORD:-[not-generated]}"
+}
+# -----------------------------------------------------------------------------
+# Runtime Execution
+# -----------------------------------------------------------------------------
+if [[ "$EUID" -ne 0 ]]; then
+    error_exit "This script requires root privileges. Run with sudo."
+fi
+
+main "$@"
