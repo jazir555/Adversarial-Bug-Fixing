@@ -145,6 +145,30 @@ init_npm() {
     log "npm dependencies installed successfully."
 }
 
+# Function to create config.json with default configuration values
+create_config_json() {
+    if [ ! -f "$CONFIG_JSON" ]; then
+        log "Creating config.json with default configuration values..."
+        create_dir "$CONFIG_DIR"
+        cat > "$CONFIG_JSON" <<'EOF'
+{
+    "PROCESSING_RANGE_START": 2000,
+    "RANGE_INCREMENT": 2000,
+    "MAX_ITERATIONS_PER_CHATBOT": 5,
+    "INITIAL_CODE_FILE": "src/main.py",
+    "FINALIZED_CODE_FILE": "src/main_final.py",
+    "PROMPTS": [
+        "Please review the following code snippet.",
+        "Suggest optimizations for the given code."
+    ]
+}
+EOF
+        log "Created config.json with default configuration values."
+    else
+        log "config.json already exists. Skipping creation."
+    fi
+}
+
 # Function to install Docker if not installed, optimized for Ubuntu
 install_docker() {
     check_sudo  # Ensure script is run with sudo
@@ -210,6 +234,14 @@ install_docker_compose() {
     else
         log "Docker Compose is already installed."
     fi
+}
+
+# Function to install Node-RED Dashboard
+install_node_red_dashboard() {
+    log "Installing Node-RED Dashboard..."
+    cd "$PROJECT_DIR"
+    npm install node-red-dashboard || error_exit "Failed to install node-red-dashboard."
+    log "Node-RED Dashboard installed successfully."
 }
 
 # Function to create .env file with specified content
@@ -1095,16 +1127,14 @@ backups/
 # Monitoring
 /monitoring/
 
-# Subflows
 /subflows/
 
-# Configurations
 /config/settings.js
 
 # SSL Certificates
 /config/ssl/
 
-# Grafana Data
+/Grafana Data
 grafana-data/
 
 # Docker Volumes
@@ -1122,6 +1152,7 @@ EOF
 # Function to create a sample source file
 create_sample_source() {
     if [ ! -f "$SRC_DIR/main.py" ]; then
+        create_dir "$SRC_DIR"
         cat > "$SRC_DIR/main.py" <<'EOF'
 def greet(name):
     return f"Hello, {name}!"
@@ -1270,9 +1301,12 @@ secure_docker_containers() {
 
     # Example: Add security_opt and no-new-privileges to each service if not already present
     # For demonstration, ensuring it's present for node-red
-    sed -i '/node-red:/a\ \ security_opt:\n\ \ \ \ - no-new-privileges:true' "$DOCKER_COMPOSE_FILE"
-
-    log "Applied Docker security best practices."
+    if ! grep -q "security_opt:" "$DOCKER_COMPOSE_FILE"; then
+        sed -i '/node-red:/a\ \ security_opt:\n\ \ \ \ - no-new-privileges:true' "$DOCKER_COMPOSE_FILE" || error_exit "Failed to apply security options to Docker Compose."
+        log "Applied Docker security best practices."
+    else
+        log "Docker security options already applied. Skipping."
+    fi
 }
 
 # Function to setup SSL using Certbot and Nginx as reverse proxy
@@ -1663,6 +1697,9 @@ install_node_red_dashboard
 
 # Security setup
 implement_security          # Integrate security flows into flows.json
+
+# Automated Backups
+setup_automated_backups     # Now invoked
 
 # Additional Setup
 create_gitignore
