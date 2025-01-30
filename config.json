@@ -1,266 +1,161 @@
+#!/bin/bash
+
+# Ensure required tools are installed
+if ! command -v node &> /dev/null || ! command -v npm &> /dev/null; then
+    echo "Node.js and npm are required. Please install them first."
+    exit 1
+fi
+
+# Create project directory structure
+mkdir -p node-red-automation/flows
+cd node-red-automation
+
+# Create package.json with required dependencies
+cat > package.json <<'EOF'
 {
-  "name": "AI Code Validation Workflow v5 - Enterprise Grade",
-  "nodes": [
-    {
-      "parameters": {
-        "interval": [
-          {
-            "field": "cronExpression",
-            "expression": "*/30 * * * *"
-          }
-        ]
-      },
-      "name": "Schedule Trigger",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "position": [100, 100]
-    },
-    {
-      "parameters": {
-        "values": {
-          "string": [
-            {
-              "name": "github_repo",
-              "value": "your-org/your-repo"
-            },
-            {
-              "name": "code_file",
-              "value": "src/main.py"
-            },
-            {
-              "name": "max_iterations",
-              "value": "10"
-            },
-            {
-              "name": "min_change_percent",
-              "value": "2.5"
-            },
-            {
-              "name": "language",
-              "value": "python"
-            }
-          ],
-          "number": [
-            {
-              "name": "parallel_ranges",
-              "value": "3"
-            },
-            {
-              "name": "retry_attempts",
-              "value": "3"
-            }
-          ]
-        }
-      },
-      "name": "Config",
-      "type": "n8n-nodes-base.set",
-      "position": [300, 100]
-    },
-    {
-      "parameters": {
-        "functionCode": "const fs = require('fs').promises;\nconst detect = require('language-detect');\n\nasync function main() {\n  const code = await fs.readFile($node['Config'].json.code_file, 'utf8');\n  const language = detect($node['Config'].json.code_file) || $node['Config'].json.language;\n  \n  return {\n    json: {\n      originalCode: code,\n      language,\n      ranges: await detectCodeBlocks(code, language)\n    }\n  };\n}\n\nasync function detectCodeBlocks(code, lang) {\n  // Language-specific block detection logic\n  const blocks = [];\n  // ... (implementation for different languages)\n  return blocks;\n}\n\nreturn main();"
-      },
-      "name": "Code Analyzer",
-      "type": "n8n-nodes-base.function",
-      "position": [500, 100]
-    },
-    {
-      "parameters": {
-        "batchSize": "={{$node['Config'].json.parallel_ranges}}",
-        "options": {
-          "reset": true
-        }
-      },
-      "name": "Parallel Processor",
-      "type": "n8n-nodes-base.splitInBatches",
-      "position": [700, 100]
-    },
-    {
-      "parameters": {
-        "functionCode": "const LANG_CONFIG = {\n  python: {\n    start: /(def |class |async def )/,\n    end: /(return|raise |except |finally:)/\n  },\n  javascript: {\n    start: /(function |class |const )/,\n    end: /(return|throw |catch|})/\n  }\n};\n\nconst adjustRange = (code, range, lang) => {\n  const config = LANG_CONFIG[lang] || LANG_CONFIG.python;\n  const lines = code.split('\\n');\n  let [start, end] = [range.start, range.end];\n  \n  // Smart expansion with boundary checks\n  while (start > 0 && !config.start.test(lines[start - 1])) start--;\n  while (end < lines.length && !config.end.test(lines[end])) end++;\n  \n  return {\n    adjustedRange: { start, end },\n    codeChunk: lines.slice(start, end + 1).join('\\n'),\n    context: lines.slice(Math.max(0, start - 5), end + 5).join('\\n')\n  };\n};\n\nreturn {\n  json: {\n    ...$json,\n    ...adjustRange($json.originalCode, $json.range, $json.language)\n  }\n};"
-      },
-      "name": "Smart Range Adjuster",
-      "type": "n8n-nodes-base.function",
-      "position": [900, 100]
-    },
-    {
-      "parameters": {
-        "functionCode": "const PROMPT_STRATEGIES = {\n  iterative: `Analyze this {{language}} code considering previous feedback:\n{{history}}\n\nCurrent code:\n{{code}}\n\nContext:\n{{context}}`,\n  security: `Audit for security vulnerabilities in this {{language}} code...`\n};\n\nconst getPrompt = (strategy, context) => {\n  return PROMPT_STRATEGIES[strategy]\n    .replace('{{language}}', context.language)\n    .replace('{{code}}', context.codeChunk)\n    .replace('{{context}}', context.context)\n    .replace('{{history}}', context.validationHistory);\n};\n\nreturn {\n  json: {\n    ...$json,\n    prompt: getPrompt('iterative', $json)\n  }\n};"
-      },
-      "name": "Prompt Engine",
-      "type": "n8n-nodes-base.function",
-      "position": [1100, 100]
-    },
-    {
-      "parameters": {
-        "options": {
-          "retryOnFail": true,
-          "maxTries": "={{$node['Config'].json.retry_attempts}}"
-        },
-        "rules": [
-          {
-            "interval": "minute",
-            "limit": 30,
-            "key": "api_global_limit"
-          }
-        ]
-      },
-      "name": "API Gateway",
-      "type": "n8n-nodes-base.throttle",
-      "position": [1300, 100]
-    },
-    {
-      "parameters": {
-        "authentication": "predefinedCredentialType",
-        "credentialType": "openAiApi",
-        "resource": "chat",
-        "operation": "completion",
-        "model": "gpt-4-1106-preview",
-        "temperature": 0.2,
-        "messages": "={{[{ role: 'system', content: 'You are a senior code reviewer' }, { role: 'user', content: $json.prompt }]}}"
-      },
-      "name": "OpenAI Analyst",
-      "type": "n8n-nodes-base.openAi",
-      "position": [1500, 50]
-    },
-    {
-      "parameters": {
-        "authentication": "predefinedCredentialType",
-        "credentialType": "anthropicApi",
-        "resource": "message",
-        "operation": "create",
-        "model": "claude-3-opus-20240229",
-        "maxTokens": 4000,
-        "messages": "={{[{ role: 'user', content: $json.prompt }]}}"
-      },
-      "name": "Anthropic Analyst",
-      "type": "n8n-nodes-base.anthropic",
-      "position": [1500, 150]
-    },
-    {
-      "parameters": {
-        "functionCode": "const { createParser } = require('@parser/code-analysis');\n\nconst parseResponse = (response, lang) => {\n  const parser = createParser(lang);\n  const analysis = parser.analyze(response);\n  \n  if (!analysis.isValid) {\n    throw new Error('Invalid code structure: ' + analysis.errors.join(', '));\n  }\n  \n  return {\n    cleanCode: analysis.code,\n    metrics: analysis.metrics,\n    warnings: analysis.warnings\n  };\n};\n\nconst result = parseResponse($input.all()[0].json, $json.language);\n\nreturn {\n  json: {\n    ...$json,\n    ...result,\n    validationHistory: [\n      ...$json.validationHistory,\n      {\n        iteration: $json.iteration + 1,\n        timestamp: new Date().toISOString(),\n        metrics: result.metrics\n      }\n    ]\n  }\n};"
-      },
-      "name": "Code Validator",
-      "type": "n8n-nodes-base.function",
-      "position": [1700, 100]
-    },
-    {
-      "parameters": {
-        "functionCode": "const DIFF_STRATEGIES = {\n  semantic: (a, b) => {\n    // Advanced AST-based comparison\n    return calculateSemanticDiff(a, b);\n  },\n  line: (a, b) => Math.abs(a.split('\\n').length - b.split('\\n').length)\n};\n\nconst changeImpact = DIFF_STRATEGIES.semantic(\n  $json.originalCodeChunk,\n  $json.cleanCode\n);\n\nreturn {\n  json: {\n    ...$json,\n    changeImpact,\n    shouldContinue: changeImpact > $node['Config'].json.min_change_percent\n  }\n};"
-      },
-      "name": "Change Analyzer",
-      "type": "n8n-nodes-base.function",
-      "position": [1900, 100]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
-            {
-              "value1": "={{$json.shouldContinue}}",
-              "value2": true
-            }
-          ]
-        }
-      },
-      "name": "Iteration Controller",
-      "type": "n8n-nodes-base.if",
-      "position": [2100, 100]
-    },
-    {
-      "parameters": {
-        "functionCode": "const { codeIntegrate } = require('@integrator/core');\n\nreturn codeIntegrate(\n  $json.originalCode,\n  $json.cleanCode,\n  $json.adjustedRange,\n  $json.language\n);"
-      },
-      "name": "Code Integrator",
-      "type": "n8n-nodes-base.function",
-      "position": [2300, 100]
-    },
-    {
-      "parameters": {
-        "resource": "file",
-        "operation": "create",
-        "filePath": "versions/{{$json.range.start}}-{{$json.range.end}}/v{{$json.iteration}}_{{timestamp}}.py",
-        "content": "={{$json.finalCode}}",
-        "commitMessage": "AI Validation v{{$json.iteration}} [{{$json.changeImpact}}% impact]",
-        "options": {
-          "atomic": true
-        }
-      },
-      "name": "GitHub Versioner",
-      "type": "n8n-nodes-base.github",
-      "position": [2500, 100]
-    },
-    {
-      "parameters": {
-        "workflow": "monitoringWorkflowId",
-        "parameters": "={{$json}}"
-      },
-      "name": "Quality Gate",
-      "type": "n8n-nodes-base.n8nApi",
-      "position": [2700, 100]
-    },
-    {
-      "parameters": {
-        "channel": "C123456",
-        "text": "✅ Success: Processed range {{$json.range.start}}-{{$json.range.end}}\nImpact: {{$json.changeImpact}}%\nIterations: {{$json.iteration}}",
-        "blocks": "={{[{\n  type: 'section',\n  text: {\n    type: 'mrkdwn',\n    text: '*Code Validation Complete*\\nView commit: <{{$node['GitHub Versioner'].json.html_url}}|GitHub>'\n  }\n}]}}"
-      },
-      "name": "Slack Notifier",
-      "type": "n8n-nodes-base.slack",
-      "position": [2900, 100]
-    },
-    {
-      "parameters": {
-        "mode": "internal"
-      },
-      "name": "Error Handler",
-      "type": "n8n-nodes-base.errorTrigger",
-      "position": [2500, 300]
-    },
-    {
-      "parameters": {
-        "subject": "🚨 Validation Failed: {{$json.error.context.range}}",
-        "body": "Error: {{$json.error.message}}\n\nStack: {{$json.error.stack}}",
-        "to": "dev-ops@company.com",
-        "options": {
-          "priority": "high"
-        }
-      },
-      "name": "Alert System",
-      "type": "n8n-nodes-base.emailSend",
-      "position": [2700, 300]
-    }
-  ],
-  "connections": {
-    "Schedule Trigger": {"main": [[{"node": "Config", "type": "main", "index": 0}]]},
-    "Config": {"main": [[{"node": "Code Analyzer", "type": "main", "index": 0}]]},
-    "Code Analyzer": {"main": [[{"node": "Parallel Processor", "type": "main", "index": 0}]]},
-    "Parallel Processor": {"main": [[{"node": "Smart Range Adjuster", "type": "main", "index": 0}]]},
-    "Smart Range Adjuster": {"main": [[{"node": "Prompt Engine", "type": "main", "index": 0}]]},
-    "Prompt Engine": {"main": [[{"node": "API Gateway", "type": "main", "index": 0}]]},
-    "API Gateway": {
-      "main": [
-        [{"node": "OpenAI Analyst", "type": "main", "index": 0}],
-        [{"node": "Anthropic Analyst", "type": "main", "index": 0}]
-      ]
-    },
-    "OpenAI Analyst": {"main": [[{"node": "Code Validator", "type": "main", "index": 0}]]},
-    "Anthropic Analyst": {"main": [[{"node": "Code Validator", "type": "main", "index": 0}]]},
-    "Code Validator": {"main": [[{"node": "Change Analyzer", "type": "main", "index": 0}]]},
-    "Change Analyzer": {"main": [[{"node": "Iteration Controller", "type": "main", "index": 0}]]},
-    "Iteration Controller": {
-      "main": [
-        [{"node": "Prompt Engine", "type": "main", "index": 0}],
-        [{"node": "Code Integrator", "type": "main", "index": 0}]
-      ]
-    },
-    "Code Integrator": {"main": [[{"node": "GitHub Versioner", "type": "main", "index": 0}]]},
-    "GitHub Versioner": {
-      "main": [
-        [{"node": "Quality Gate", "type": "main", "index": 0}],
-        [{"node": "Slack Notifier", "type": "main", "index": 0}]
-      ]
-    },
-    "Error Handler": {"main": [[{"node": "Alert System", "type": "main", "index": 0}]]}
+  "name": "node-red-automation",
+  "dependencies": {
+    "node-red": "^3.1.0",
+    "node-red-node-email": "^1.0.1",
+    "node-red-node-slack": "^1.1.0",
+    "node-red-contrib-github": "^1.0.2",
+    "language-detect": "^1.1.0",
+    "diff": "^5.1.0"
+  },
+  "scripts": {
+    "start": "node-red --userDir ./flows --flows flow.json"
   }
 }
+EOF
+
+# Create flow configuration
+cat > flows/flow.json <<'EOF'
+[
+    {
+        "id": "schedule-trigger",
+        "type": "inject",
+        "name": "Schedule Trigger",
+        "props": [],
+        "repeat": "1800",
+        "crontab": "",
+        "wires": [["config-loader"]]
+    },
+    {
+        "id": "config-loader",
+        "type": "change",
+        "name": "Load Configuration",
+        "rules": [
+            { "t": "set", "p": "github_repo", "to": "your-org/your-repo" },
+            { "t": "set", "p": "code_file", "to": "src/main.py" },
+            { "t": "set", "p": "max_iterations", "to": "10" },
+            { "t": "set", "p": "min_change_percent", "to": "2.5" },
+            { "t": "set", "p": "language", "to": "python" },
+            { "t": "set", "p": "parallel_ranges", "to": "3" },
+            { "t": "set", "p": "retry_attempts", "to": "3" },
+            { "t": "set", "p": "error_alert_email", "to": "alerts@company.com" }
+        ],
+        "wires": [["code-analyzer"]]
+    },
+    {
+        "id": "code-analyzer",
+        "type": "function",
+        "name": "Code Analyzer",
+        "func": "const fs = require('fs');\nconst detect = require('language-detect');\nlet code = fs.readFileSync(msg.code_file, 'utf8');\nmsg.language = detect(msg.code_file) || msg.language;\nmsg.originalCode = code;\nmsg.ranges = detectCodeBlocks(code, msg.language);\nfunction detectCodeBlocks(code, lang) { let blocks = []; return blocks; }\nreturn msg;",
+        "wires": [["parallel-processor"]]
+    },
+    {
+        "id": "parallel-processor",
+        "type": "split",
+        "name": "Parallel Processor",
+        "split": "parallel_ranges",
+        "wires": [["smart-range-adjuster"]]
+    },
+    {
+        "id": "smart-range-adjuster",
+        "type": "function",
+        "name": "Smart Range Adjuster",
+        "func": "const LANG_CONFIG = {\n  python: { start: /(def |class |async def )/, end: /(return|raise |except |finally:)/ },\n  javascript: { start: /(function |class |const )/, end: /(return|throw |catch|})/ }\n};\nconst adjustRange = (code, range, lang) => {\n  const config = LANG_CONFIG[lang] || LANG_CONFIG.python;\n  const lines = code.split('\\n');\n  let [start, end] = [range.start, range.end];\n  while (start > 0 && !config.start.test(lines[start - 1])) start--;\n  while (end < lines.length && !config.end.test(lines[end])) end++;\n  return { adjustedRange: { start, end }, codeChunk: lines.slice(start, end + 1).join('\\n'), context: lines.slice(Math.max(0, start - 5), end + 5).join('\\n') };\n};\nmsg = { ...msg, ...adjustRange(msg.originalCode, msg.range, msg.language) };\nreturn msg;",
+        "wires": [["prompt-engine"]]
+    },
+    {
+        "id": "prompt-engine",
+        "type": "function",
+        "name": "Prompt Engine",
+        "func": "const prompts = [\n  'Identify all logic flaws.',\n  'Optimize performance bottlenecks.',\n  'Enhance security best practices.',\n  'Refactor redundant code.',\n  'Check compliance with coding standards.'\n];\nmsg.prompt = `${prompts[Math.floor(Math.random() * prompts.length)]}\\n${msg.language} code:\\n${msg.codeChunk}\\n\\nContext:\\n${msg.context}`;\nreturn msg;",
+        "wires": [["ai-gateway"]]
+    },
+    {
+        "id": "ai-gateway",
+        "type": "http request",
+        "name": "AI API Request",
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "payload": {
+            "model": "gpt-4",
+            "messages": [
+                { "role": "system", "content": "You are a senior code reviewer." },
+                { "role": "user", "content": "{{prompt}}" }
+            ]
+        },
+        "wires": [["code-validator"]]
+    },
+    {
+        "id": "code-validator",
+        "type": "function",
+        "name": "Code Validator",
+        "func": "const { execSync } = require('child_process');\ntry { execSync('python3 -m py_compile temp_corrected_code.py'); return msg; } catch (e) {\n  msg.error = e.message;\n  return [null, msg];\n}",
+        "wires": [["change-analyzer"], ["error-handler"]]
+    },
+    {
+        "id": "change-analyzer",
+        "type": "function",
+        "name": "Change Analyzer",
+        "func": "const diff = require('diff');\nconst changes = diff.diffLines(msg.previousCode, msg.currentCode);\nmsg.changeSummary = changes.map(c => c.added ? `+ ${c.value}` : c.removed ? `- ${c.value}` : `  ${c.value}`).join('\\n');\nmsg.changeImpact = ((changes.filter(c => c.added || c.removed).length / msg.previousCode.split('\\n').length) * 100).toFixed(2);\nmsg.shouldContinue = msg.changeImpact > msg.min_change_percent;\nreturn msg;",
+        "wires": [["iteration-controller"]]
+    },
+    {
+        "id": "iteration-controller",
+        "type": "switch",
+        "name": "Iteration Controller",
+        "rules": [{ "t": "eq", "v": "true", "vt": "bool" }],
+        "wires": [["prompt-engine"], ["github-versioner"]]
+    },
+    {
+        "id": "github-versioner",
+        "type": "github",
+        "name": "Push to GitHub",
+        "repo": "your-org/your-repo",
+        "operation": "commit",
+        "payload": { "message": "Updated Code", "content": "{{changeSummary}}" },
+        "wires": [["slack-notifier"]]
+    },
+    {
+        "id": "slack-notifier",
+        "type": "slack",
+        "name": "Slack Notification",
+        "channel": "C123456",
+        "text": "Updated Code:\n{{changeSummary}}",
+        "wires": []
+    },
+    {
+        "id": "error-handler",
+        "type": "function",
+        "name": "Error Handler",
+        "func": "msg.to = msg.error_alert_email;\nmsg.subject = `🚨 AI Validation Failed: ${msg.range.start}-${msg.range.end}`;\nmsg.body = `Error: ${msg.error}`;\nreturn msg;",
+        "wires": [["email-notifier"]]
+    },
+    {
+        "id": "email-notifier",
+        "type": "email",
+        "name": "Send Alert",
+        "wires": []
+    }
+]
+EOF
+
+# Install dependencies
+npm install
+
+# Start Node-RED
+echo "Starting Node-RED... Access the editor at http://localhost:1880"
+npm start
