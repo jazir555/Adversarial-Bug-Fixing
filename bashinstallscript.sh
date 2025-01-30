@@ -682,7 +682,7 @@ const transporter = nodemailer.createTransport({
 });
 
 const mailOptions = {
-    from: \`"Error Notifier" <\${msg.smtp_user}>\`,
+    from: `"Error Notifier" <${msg.smtp_user}>`,
     to: msg.alert_email,
     subject: msg.subject || '🚨 AI Validation Failed',
     text: msg.body || msg.error
@@ -965,6 +965,60 @@ create_subflows() {
 EOF
 
     log "Created sample subflow for API Request Handling."
+}
+
+# Function to create .gitignore with specified content
+create_gitignore() {
+    if [ ! -f "$GITIGNORE_FILE" ]; then
+        cat > "$GITIGNORE_FILE" <<'EOF'
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+
+# Docker files
+docker-compose.override.yml
+
+# Logs
+*.log
+
+# Backup files
+backups/
+
+# Testing
+/tests/
+
+# Monitoring
+/monitoring/
+
+/subflows/
+
+/config/settings.js
+
+# Miscellaneous
+.DS_Store
+EOF
+        log "Created .gitignore with standard exclusions."
+    else
+        log ".gitignore already exists. Skipping creation."
+    fi
+}
+
+# Function to create a sample source file
+create_sample_source() {
+    if [ ! -f "$SRC_DIR/main.py" ]; then
+        cat > "$SRC_DIR/main.py" <<'EOF'
+def greet(name):
+    return f"Hello, {name}!"
+
+if __name__ == "__main__":
+    print(greet("World"))
+EOF
+        log "Created sample source file at src/main.py."
+    else
+        log "Sample source file src/main.py already exists. Skipping creation."
+    fi
 }
 
 # Function to set up automated backups using cron
