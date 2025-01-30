@@ -1,0 +1,30 @@
+{
+    "id": "api-request-handler",
+    "type": "subflow",
+    "name": "API Request Handler",
+    "info": "Handles API requests with rate limiting and error handling.",
+    "category": "function",
+    "in": [
+        {
+            "x": 40,
+            "y": 40,
+            "wires": []
+        }
+    ],
+    "out": [
+        {
+            "x": 480,
+            "y": 40,
+            "wires": []
+        }
+    ],
+    "env": [
+        {
+            "name": "API_RATE_LIMIT",
+            "type": "num",
+            "value": "5",
+            "required": true
+        }
+    ],
+    "color": "#a6bbcf"
+}
