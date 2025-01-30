@@ -1,0 +1,39 @@
+# Function to create .gitignore with specified content
+create_gitignore() {
+    if [ ! -f "$GITIGNORE_FILE" ]; then
+        cat > "$GITIGNORE_FILE" <<'EOF'
+# Node modules
+node_modules/
+
+# Environment variables
+.env
+
+# Docker files
+docker-compose.override.yml
+
+# Logs
+*.log
+
+# Backup files
+backups/
+
+# Testing
+/tests/
+
+# Monitoring
+/monitoring/
+
+# Subflows
+/subflows/
+
+# Configuration
+/config/settings.js
+
+# Miscellaneous
+.DS_Store
+EOF
+        log "Created .gitignore with standard exclusions."
+    else
+        log ".gitignore already exists. Skipping creation."
+    fi
+}
