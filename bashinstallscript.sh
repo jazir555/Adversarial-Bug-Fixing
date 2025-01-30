@@ -34,6 +34,7 @@ SUBFLOWS_DIR="$PROJECT_DIR/subflows"
 BACKUP_DIR="$PROJECT_DIR/backups"
 MONITORING_DIR="$PROJECT_DIR/monitoring"
 SETTINGS_FILE="$CONFIG_DIR/settings.js"
+TMP_DIR="$PROJECT_DIR/tmp"  # Temporary directory for cleanup
 
 # =============================================================================
 # Function Definitions
@@ -88,7 +89,17 @@ check_node_npm() {
     check_command npm
 }
 
-# Modified: Create custom package.json with all required dependencies
+# New: Check Node.js version is 16.x
+check_node_version() {
+    node_version=$(node --version)
+    if ! echo "$node_version" | grep -q '^v16\.'; then
+        error_exit "Node.js 16.x required. Current version: $node_version"
+    else
+        log "Node.js version $node_version is sufficient."
+    fi
+}
+
+# Modified: Create custom package.json with all required dependencies and version pinning
 create_custom_package_json() {
     if [ ! -f "$PACKAGE_JSON_FILE" ]; then
         log "Creating custom package.json..."
@@ -102,7 +113,7 @@ create_custom_package_json() {
     "test": "jest"
   },
   "dependencies": {
-    "node-red": "^3.0.0",
+    "node-red": "3.0.2",
     "dotenv": "^16.0.0",
     "node-red-node-email": "^1.0.0",
     "node-red-node-slack": "^1.0.0",
@@ -116,7 +127,7 @@ create_custom_package_json() {
   }
 }
 EOF
-        log "Created custom package.json with predefined dependencies."
+        log "Created custom package.json with predefined dependencies and pinned Node-RED version."
     else
         log "Custom package.json already exists."
     fi
@@ -130,9 +141,15 @@ init_npm() {
     log "npm dependencies installed successfully."
 }
 
-# Modified: Add sudo check specific to Docker installation
+# Modified: Add sudo check specific to Docker installation and OS check
 install_docker() {
     check_sudo  # Now called here instead of at script start
+
+    # OS Check for Ubuntu
+    if ! grep -q 'Ubuntu' /etc/os-release; then
+        log "Warning: Docker installation is optimized for Ubuntu. Proceeding anyway."
+    fi
+
     if ! command -v docker >/dev/null 2>&1; then
         log "Docker not found. Installing Docker..."
 
@@ -270,12 +287,12 @@ EOF
     fi
 }
 
-# Function to generate bcrypt hash for admin password
+# Function to generate bcrypt hash for admin password using Node.js
 generate_bcrypt_hash() {
     read -sp "Enter admin password for Node-RED: " ADMIN_PASSWORD
     echo
-    # Generate bcrypt hash
-    ADMIN_HASH=$(python3 -c "import bcrypt, sys; print(bcrypt.hashpw(sys.stdin.read().encode('utf-8'), bcrypt.gensalt()).decode())" <<< "$ADMIN_PASSWORD")
+    # Generate bcrypt hash using Node.js
+    ADMIN_HASH=$(node -e "const bcrypt = require('bcrypt'); bcrypt.hash('$ADMIN_PASSWORD', 10, function(err, hash) { if (err) { console.error(err); process.exit(1); } else { console.log(hash); } });")
     echo "$ADMIN_HASH"
 }
 
@@ -1008,6 +1025,7 @@ backups/
 # Testing
 /tests/
 
+# Monitoring
 /monitoring/
 
 /subflows/
@@ -1039,7 +1057,7 @@ EOF
     fi
 }
 
-# Function to set up automated backups using cron
+# Function to set up automated backups using cron with error handling
 setup_automated_backups() {
     create_dir "$BACKUP_DIR"
 
@@ -1051,6 +1069,12 @@ SOURCE_DIR="/absolute/path/to/node-red-automation" # Replace with the actual abs
 BACKUP_DIR="/absolute/path/to/node-red-automation/backups" # Replace with the actual absolute path
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_FILE="$BACKUP_DIR/backup_$TIMESTAMP.tar.gz"
+
+# Check if source directory exists
+if [ ! -d "$SOURCE_DIR" ]; then
+  echo "Error: Source directory missing" >&2
+  exit 1
+fi
 
 # Create backup
 tar -czf "$BACKUP_FILE" "$SOURCE_DIR"
@@ -1135,3 +1159,31 @@ create_readme_full() {
     cat > "$README_FILE" <<'EOF'
 # Node-RED Automation
 
+## Description
+Automated Node-RED workflow for AI-driven code analysis, validation, and deployment to GitHub with notifications via Slack and email alerts. Additionally, the setup includes Dockerization for consistent environments, CI/CD pipelines using GitHub Actions, monitoring with Prometheus and Grafana, unit and integration testing, reusable subflows, security enhancements, automated backups, and comprehensive documentation.
+
+## Features
+- **Dynamic Code Range Selection:** Automatically extracts and processes specific ranges of code.
+- **Multiple Chatbot Interactions:** Alternates between multiple AI chatbots for adversarial testing and validation.
+- **Recursive Validation:** Iteratively refines code through multiple AI validation cycles.
+- **GitHub Integration:** Commits validated and corrected code to a specified GitHub repository.
+- **Notifications:**
+  - **Slack:** Sends success notifications upon successful GitHub commits.
+  - **Email:** Sends error alerts for any failures during the workflow.
+- **Secure Configuration Management:** Utilizes environment variables to manage sensitive information securely.
+- **Dockerization:** Ensures consistent environments across deployments.
+- **CI/CD Pipeline:** Automates testing and deployment using GitHub Actions.
+- **Monitoring and Logging:** Integrates Prometheus and Grafana for performance metrics and logs visualization.
+- **Testing Frameworks:** Implements unit and integration tests using Jest and Mocha.
+- **Reusable Subflows:** Encapsulates common functionalities for maintainability.
+- **Automated Backups:** Regularly backs up configurations and source code.
+- **Security Enhancements:** Implements rate limiting, data encryption, and access controls.
+
+## Setup Instructions
+
+### 1. Run the Setup Script
+Ensure you have the necessary permissions and that required commands (Node.js, npm, docker, docker-compose) are installed. If Docker is not installed, the script will handle its installation.
+
+```bash
+sudo chmod +x setup-node-red-automation.sh
+sudo ./setup-node-red-automation.sh
