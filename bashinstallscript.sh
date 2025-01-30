@@ -78,8 +78,61 @@ create_dir() {
     fi
 }
 
-# Function to install Docker if not installed
+# =============================================================================
+# Modified Function Definitions
+# =============================================================================
+
+# New: Check for Node.js and npm before proceeding
+check_node_npm() {
+    check_command node
+    check_command npm
+}
+
+# Modified: Create custom package.json with all required dependencies
+create_custom_package_json() {
+    if [ ! -f "$PACKAGE_JSON_FILE" ]; then
+        log "Creating custom package.json..."
+        cat > "$PACKAGE_JSON_FILE" <<'EOF'
+{
+  "name": "node-red-automation",
+  "version": "1.0.0",
+  "description": "AI-Driven Code Analysis and Deployment Automation",
+  "scripts": {
+    "start": "node-red flows.json",
+    "test": "jest"
+  },
+  "dependencies": {
+    "node-red": "^3.0.0",
+    "dotenv": "^16.0.0",
+    "node-red-node-email": "^1.0.0",
+    "node-red-node-slack": "^1.0.0",
+    "node-red-contrib-github": "^1.0.0",
+    "language-detect": "^2.0.0",
+    "diff": "^5.0.0",
+    "nodemailer": "^6.7.0",
+    "jest": "^29.0.0",
+    "mocha": "^10.0.0",
+    "bcrypt": "^5.0.0"
+  }
+}
+EOF
+        log "Created custom package.json with predefined dependencies."
+    else
+        log "Custom package.json already exists."
+    fi
+}
+
+# Modified: Simplified npm initialization
+init_npm() {
+    log "Installing npm dependencies from package.json..."
+    cd "$PROJECT_DIR"
+    npm install || error_exit "npm install failed."
+    log "npm dependencies installed successfully."
+}
+
+# Modified: Add sudo check specific to Docker installation
 install_docker() {
+    check_sudo  # Now called here instead of at script start
     if ! command -v docker >/dev/null 2>&1; then
         log "Docker not found. Installing Docker..."
 
@@ -113,6 +166,36 @@ install_docker() {
     fi
 }
 
+# Modified: Add post-install instructions
+create_readme() {
+    cat > "$README_FILE" <<'EOF'
+## IMPORTANT POST-SETUP STEPS
+
+1. Replace all placeholders in the '.env' file with actual credentials
+2. Docker installation requires Ubuntu 20.04/22.04 LTS
+3. Access Node-RED at: http://localhost:${NODE_RED_PORT}
+4. Cron backups run daily at 2 AM to backups/
+EOF
+    log "Created README with post-install instructions."
+}
+
+# New: Final setup completion message
+print_completion() {
+    echo "============================================================"
+    echo "SETUP COMPLETE"
+    echo "============================================================"
+    echo "1. Edit .env file with your actual credentials:"
+    echo "   $ nano $ENV_FILE"
+    echo "2. Start Node-RED:"
+    echo "   $ cd $PROJECT_DIR && npm start"
+    echo "3. Access dashboard: http://localhost:$(grep NODE_RED_PORT $ENV_FILE | cut -d= -f2)"
+    echo "============================================================"
+}
+
+# =============================================================================
+# Original Function Definitions (Unchanged)
+# =============================================================================
+
 # Function to install Docker Compose if not installed
 install_docker_compose() {
     if ! command -v docker-compose >/dev/null 2>&1; then
@@ -136,31 +219,6 @@ install_docker_compose() {
     else
         log "Docker Compose is already installed."
     fi
-}
-
-# Function to initialize npm and install dependencies
-init_npm() {
-    if [ ! -f "$PACKAGE_JSON_FILE" ]; then
-        log "Initializing npm in $PROJECT_DIR..."
-        cd "$PROJECT_DIR"
-        npm init -y || error_exit "npm initialization failed."
-        log "Initialized npm in $PROJECT_DIR."
-    else
-        log "package.json already exists in $PROJECT_DIR."
-    fi
-
-    # Install necessary packages
-    log "Installing npm dependencies..."
-    cd "$PROJECT_DIR"
-    npm install node-red dotenv node-red-node-email node-red-node-slack node-red-contrib-github language-detect diff nodemailer jest mocha bcrypt --save || error_exit "npm install failed."
-    log "npm dependencies installed successfully."
-}
-
-# Function to create package.json with specified content (if needed)
-create_custom_package_json() {
-    # If you have a custom package.json, you can place it here.
-    # For this script, we assume npm init -y suffices.
-    :
 }
 
 # Function to create .env file with specified content
@@ -652,7 +710,7 @@ create_flow_json() {
         "type": "function",
         "z": "flow",
         "name": "Error Handler",
-        "func": "const nodemailer = require('nodemailer');\n\n// Validate SMTP configuration\nif (!msg.smtp_server || !msg.smtp_port || !msg.smtp_user || !msg.smtp_pass) {\n    node.error('SMTP configuration is incomplete.', msg);\n    return null;\n}\n\nconst transporter = nodemailer.createTransport({\n    host: msg.smtp_server,\n    port: parseInt(msg.smtp_port, 10),\n    secure: msg.smtp_port == 465, // true for 465, false for other ports\n    auth: {\n        user: msg.smtp_user,\n        pass: msg.smtp_pass\n    }\n});\n\nconst mailOptions = {\n    from: `\"Error Notifier\" <${msg.smtp_user}>`,\n    to: msg.alert_email,\n    subject: msg.subject || '🚨 AI Validation Failed',\n    text: msg.body || msg.error\n};\n\ntransporter.sendMail(mailOptions, (error, info) => {\n    if (error) {\n        node.error('Failed to send error email: ' + error.message, msg);\n    } else {\n        node.log('Error email sent: ' + info.response);\n    }\n});\n\nreturn null;\n",
+        "func": "const nodemailer = require('nodemailer');\n\n// Validate SMTP configuration\nif (!msg.smtp_server || !msg.smtp_port || !msg.smtp_user || !msg.smtp_pass) {\n    node.error('SMTP configuration is incomplete.', msg);\n    return null;\n}\n\nconst transporter = nodemailer.createTransport({\n    host: msg.smtp_server,\n    port: parseInt(msg.smtp_port, 10),\n    secure: msg.smtp_port == 465, // true for 465, false for other ports\n    auth: {\n        user: msg.smtp_user,\n        pass: msg.smtp_pass\n    }\n});\n\nconst mailOptions = {\n    from: \"Error Notifier\" <${msg.smtp_user}>,\n    to: msg.alert_email,\n    subject: msg.subject || '🚨 AI Validation Failed',\n    text: msg.body || msg.error\n};\n\ntransporter.sendMail(mailOptions, (error, info) => {\n    if (error) {\n        node.error('Failed to send error email: ' + error.message, msg);\n    } else {\n        node.log('Error email sent: ' + info.response);\n    }\n});\n\nreturn null;\n",
         "outputs": 0,
         "noerr": 0,
         "x": 1750,
@@ -1073,35 +1131,7 @@ EOF
 }
 
 # Function to create README.md with detailed setup instructions
-create_readme() {
+create_readme_full() {
     cat > "$README_FILE" <<'EOF'
 # Node-RED Automation
 
-## Description
-Automated Node-RED workflow for AI-driven code analysis, validation, and deployment to GitHub with notifications via Slack and email alerts. Additionally, the setup includes Dockerization for consistent environments, CI/CD pipelines using GitHub Actions, monitoring with Prometheus and Grafana, unit and integration testing, reusable subflows, security enhancements, automated backups, and comprehensive documentation.
-
-## Features
-- **Dynamic Code Range Selection:** Automatically extracts and processes specific ranges of code.
-- **Multiple Chatbot Interactions:** Alternates between multiple AI chatbots for adversarial testing and validation.
-- **Recursive Validation:** Iteratively refines code through multiple AI validation cycles.
-- **GitHub Integration:** Commits validated and corrected code to a specified GitHub repository.
-- **Notifications:**
-  - **Slack:** Sends success notifications upon successful GitHub commits.
-  - **Email:** Sends error alerts for any failures during the workflow.
-- **Secure Configuration Management:** Utilizes environment variables to manage sensitive information securely.
-- **Dockerization:** Ensures consistent environments across deployments.
-- **CI/CD Pipeline:** Automates testing and deployment using GitHub Actions.
-- **Monitoring and Logging:** Integrates Prometheus and Grafana for performance metrics and logs visualization.
-- **Testing Frameworks:** Implements unit and integration tests using Jest and Mocha.
-- **Reusable Subflows:** Encapsulates common functionalities for maintainability.
-- **Automated Backups:** Regularly backs up configurations and source code.
-- **Security Enhancements:** Implements rate limiting, data encryption, and access controls.
-
-## Setup Instructions
-
-### 1. Run the Setup Script
-Ensure you have the necessary permissions and that required commands (`Node.js`, `npm`, `docker`, `docker-compose`) are installed. If Docker is not installed, the script will handle its installation.
-
-```bash
-sudo chmod +x setup-node-red-automation.sh
-sudo ./setup-node-red-automation.sh
