@@ -51,7 +51,11 @@ error_exit() {
 
 # Function to check if a command exists
 check_command() {
-    command -v "$1" >/dev/null 2>&1 || error_exit "$1 is not installed. Please install it and rerun the script."
+    if ! command -v "$1" >/dev/null 2>&1; then
+        error_exit "$1 is not installed. Please install it and rerun the script."
+    else
+        log "Command '$1' is already installed."
+    fi
 }
 
 # Function to create a directory if it doesn't exist
@@ -61,6 +65,66 @@ create_dir() {
         log "Created directory: $1"
     else
         log "Directory already exists: $1"
+    fi
+}
+
+# Function to install Docker if not installed
+install_docker() {
+    if ! command -v docker >/dev/null 2>&1; then
+        log "Docker not found. Installing Docker..."
+
+        # Update the apt package index
+        sudo apt-get update -y || error_exit "Failed to update package index."
+
+        # Install packages to allow apt to use a repository over HTTPS
+        sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release || error_exit "Failed to install prerequisites for Docker."
+
+        # Add Docker’s official GPG key
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg || error_exit "Failed to add Docker's GPG key."
+
+        # Set up the stable repository
+        echo \
+          "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
+          $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null || error_exit "Failed to add Docker repository."
+
+        # Update the apt package index again
+        sudo apt-get update -y || error_exit "Failed to update package index after adding Docker repository."
+
+        # Install the latest version of Docker Engine, Docker CLI, and containerd
+        sudo apt-get install -y docker-ce docker-ce-cli containerd.io || error_exit "Failed to install Docker."
+
+        # Enable and start Docker service
+        sudo systemctl enable docker || error_exit "Failed to enable Docker service."
+        sudo systemctl start docker || error_exit "Failed to start Docker service."
+
+        log "Docker installed successfully."
+    else
+        log "Docker is already installed."
+    fi
+}
+
+# Function to install Docker Compose if not installed
+install_docker_compose() {
+    if ! command -v docker-compose >/dev/null 2>&1; then
+        log "Docker Compose not found. Installing Docker Compose..."
+
+        # Get the latest version of Docker Compose from GitHub
+        DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d '"' -f 4)
+
+        # Download Docker Compose binary
+        sudo curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose || error_exit "Failed to download Docker Compose."
+
+        # Apply executable permissions to the binary
+        sudo chmod +x /usr/local/bin/docker-compose || error_exit "Failed to apply executable permissions to Docker Compose."
+
+        # Create a symbolic link to /usr/bin if necessary
+        if [ ! -L /usr/bin/docker-compose ]; then
+            sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose || error_exit "Failed to create symbolic link for Docker Compose."
+        fi
+
+        log "Docker Compose installed successfully."
+    else
+        log "Docker Compose is already installed."
     fi
 }
 
@@ -357,31 +421,7 @@ create_flow_json() {
         "type": "function",
         "z": "flow",
         "name": "Range Iterator",
-        "func": `
-if (msg.current_range_index < msg.ranges.length) {
-    const currentRange = msg.ranges[msg.current_range_index];
-    msg.current_range = currentRange;
-    
-    // Extract code chunk based on current range
-    const fs = require('fs');
-    const code = fs.readFileSync(msg.initial_code_file, 'utf8');
-    const lines = code.split('\\n');
-    const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');
-    
-    msg.code_chunk = codeChunk;
-    msg.iteration = 0;
-    msg.chatbots = [
-        { name: "Chatbot A", api_url: msg.chatbot_a_api_url, api_key: msg.chatbot_a_api_key },
-        { name: "Chatbot B", api_url: msg.chatbot_b_api_url, api_key: msg.chatbot_b_api_key }
-    ];
-    msg.current_chatbot_index = 0;
-    
-    return msg;
-} else {
-    // All ranges processed
-    return [msg, null];
-}
-`,
+        "func": "if (msg.current_range_index < msg.ranges.length) {\n    const currentRange = msg.ranges[msg.current_range_index];\n    msg.current_range = currentRange;\n    \n    // Extract code chunk based on current range\n    const fs = require('fs');\n    const code = fs.readFileSync(msg.initial_code_file, 'utf8');\n    const lines = code.split('\\n');\n    const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');\n    \n    msg.code_chunk = codeChunk;\n    msg.iteration = 0;\n    msg.chatbots = [\n        { name: \"Chatbot A\", api_url: msg.chatbot_a_api_url, api_key: msg.chatbot_a_api_key },\n        { name: \"Chatbot B\", api_url: msg.chatbot_b_api_url, api_key: msg.chatbot_b_api_key }\n    ];\n    msg.current_chatbot_index = 0;\n    \n    return msg;\n} else {\n    // All ranges processed\n    return [msg, null];\n}\n",
         "outputs": 2,
         "noerr": 0,
         "x": 750,
@@ -400,20 +440,7 @@ if (msg.current_range_index < msg.ranges.length) {
         "type": "function",
         "z": "flow",
         "name": "Prompt Engine",
-        "func": `
-const prompts = [
-    'Check this code for errors, make sure it is bug free, add any functionality you think is important.',
-    'Identify all logic flaws.',
-    'Optimize performance bottlenecks.',
-    'Enhance security best practices.',
-    'Refactor redundant code.',
-    'Check compliance with coding standards.'
-];
-
-const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
-msg.prompt = \`\${randomPrompt}\\n\\n\${msg.language || 'Python'} code:\\n\${msg.code_chunk}\\n\\nContext:\\n\${msg.context || ''}\`;
-return msg;
-`,
+        "func": "const prompts = [\n    'Check this code for errors, make sure it is bug free, add any functionality you think is important.',\n    'Identify all logic flaws.',\n    'Optimize performance bottlenecks.',\n    'Enhance security best practices.',\n    'Refactor redundant code.',\n    'Check compliance with coding standards.'\n];\n\nconst randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];\nmsg.prompt = `${randomPrompt}\\n\\n${msg.language || 'Python'} code:\\n${msg.code_chunk}\\n\\nContext:\\n${msg.context || ''}`;\nreturn msg;\n",
         "outputs": 1,
         "noerr": 0,
         "x": 950,
@@ -429,24 +456,7 @@ return msg;
         "type": "function",
         "z": "flow",
         "name": "AI Gateway Configurator",
-        "func": `
-const chatbot = msg.chatbots[msg.current_chatbot_index % msg.chatbots.length];
-
-msg.url = chatbot.api_url;
-msg.headers = {
-    "Content-Type": "application/json",
-    "Authorization": \`Bearer \${chatbot.api_key}\`
-};
-msg.payload = JSON.stringify({
-    model: "gpt-4",
-    messages: [
-        { role: "system", content: "You are a senior code reviewer." },
-        { role: "user", content: msg.prompt }
-    ]
-});
-
-return msg;
-`,
+        "func": "const chatbot = msg.chatbots[msg.current_chatbot_index % msg.chatbots.length];\n\nmsg.url = chatbot.api_url;\nmsg.headers = {\n    \"Content-Type\": \"application/json\",\n    \"Authorization\": `Bearer ${chatbot.api_key}`\n};\nmsg.payload = JSON.stringify({\n    model: \"gpt-4\",\n    messages: [\n        { role: \"system\", content: \"You are a senior code reviewer.\" },\n        { role: \"user\", content: msg.prompt }\n    ]\n});\n\nreturn msg;\n",
         "outputs": 1,
         "noerr": 0,
         "x": 1150,
@@ -488,30 +498,7 @@ return msg;
         "type": "function",
         "z": "flow",
         "name": "AI Response Processor",
-        "func": `
-const response = msg.payload;
-let correctedCode = '';
-
-if (response && response.choices && response.choices.length > 0) {
-    correctedCode = response.choices[0].message.content.trim();
-} else {
-    msg.error = 'Invalid response from AI chatbot.';
-    return [null, msg];
-}
-
-msg.corrected_code = correctedCode;
-
-// Increment iteration count
-msg.iteration += 1;
-
-// Update code chunk with corrected code
-msg.code_chunk = correctedCode;
-
-// Alternate to next chatbot
-msg.current_chatbot_index += 1;
-
-return msg;
-`,
+        "func": "const response = msg.payload;\nlet correctedCode = '';\n\nif (response && response.choices && response.choices.length > 0) {\n    correctedCode = response.choices[0].message.content.trim();\n} else {\n    msg.error = 'Invalid response from AI chatbot.';\n    return [null, msg];\n}\n\nmsg.corrected_code = correctedCode;\n\n// Increment iteration count\nmsg.iteration += 1;\n\n// Update code chunk with corrected code\nmsg.code_chunk = correctedCode;\n\n// Alternate to next chatbot\nmsg.current_chatbot_index += 1;\n\nreturn msg;\n",
         "outputs": 2,
         "noerr": 0,
         "x": 1550,
@@ -530,13 +517,7 @@ return msg;
         "type": "function",
         "z": "flow",
         "name": "Check Iterations",
-        "func": `
-if (msg.iteration < msg.max_iterations_per_chatbot) {
-    return msg;
-} else {
-    return [null, msg];
-}
-`,
+        "func": "if (msg.iteration < msg.max_iterations_per_chatbot) {\n    return msg;\n} else {\n    return [null, msg];\n}\n",
         "outputs": 2,
         "noerr": 0,
         "x": 1750,
@@ -555,21 +536,7 @@ if (msg.iteration < msg.max_iterations_per_chatbot) {
         "type": "function",
         "z": "flow",
         "name": "Finalize Corrected Code",
-        "func": `
-const fs = require('fs');
-
-const finalizedCode = msg.corrected_code;
-const finalizedFile = msg.finalized_code_file;
-
-try {
-    fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');
-    msg.commit_message = "Automated Code Update: Finalized corrections for range " + msg.current_range.start + "-" + msg.current_range.end;
-    return msg;
-} catch (err) {
-    msg.error = 'Finalization failed: ' + err.message;
-    return [null, msg];
-}
-`,
+        "func": "const fs = require('fs');\n\nconst finalizedCode = msg.corrected_code;\nconst finalizedFile = msg.finalized_code_file;\n\ntry {\n    fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');\n    msg.commit_message = \"Automated Code Update: Finalized corrections for range \" + msg.current_range.start + \"-\" + msg.current_range.end;\n    return msg;\n} catch (err) {\n    msg.error = 'Finalization failed: ' + err.message;\n    return [null, msg];\n}\n",
         "outputs": 2,
         "noerr": 0,
         "x": 1950,
@@ -623,10 +590,7 @@ try {
         "type": "function",
         "z": "flow",
         "name": "Range Iterator Increment",
-        "func": `
-msg.current_range_index += 1;
-return msg;
-`,
+        "func": "msg.current_range_index += 1;\nreturn msg;\n",
         "outputs": 1,
         "noerr": 0,
         "x": 1750,
@@ -642,11 +606,7 @@ return msg;
         "type": "function",
         "z": "flow",
         "name": "Finalization",
-        "func": `
-    // Placeholder for any finalization steps if needed
-    // For example, resetting variables or logging
-    return msg;
-    `,
+        "func": "// Placeholder for any finalization steps if needed\n// For example, resetting variables or logging\nreturn msg;\n",
         "outputs": 1,
         "noerr": 0,
         "x": 1550,
@@ -662,42 +622,7 @@ return msg;
         "type": "function",
         "z": "flow",
         "name": "Error Handler",
-        "func": `
-const nodemailer = require('nodemailer');
-
-// Validate SMTP configuration
-if (!msg.smtp_server || !msg.smtp_port || !msg.smtp_user || !msg.smtp_pass) {
-    node.error('SMTP configuration is incomplete.', msg);
-    return null;
-}
-
-const transporter = nodemailer.createTransport({
-    host: msg.smtp_server,
-    port: parseInt(msg.smtp_port, 10),
-    secure: msg.smtp_port == 465, // true for 465, false for other ports
-    auth: {
-        user: msg.smtp_user,
-        pass: msg.smtp_pass
-    }
-});
-
-const mailOptions = {
-    from: `"Error Notifier" <${msg.smtp_user}>`,
-    to: msg.alert_email,
-    subject: msg.subject || '🚨 AI Validation Failed',
-    text: msg.body || msg.error
-};
-
-transporter.sendMail(mailOptions, (error, info) => {
-    if (error) {
-        node.error('Failed to send error email: ' + error.message, msg);
-    } else {
-        node.log('Error email sent: ' + info.response);
-    }
-});
-
-return null;
-`,
+        "func": "const nodemailer = require('nodemailer');\n\n// Validate SMTP configuration\nif (!msg.smtp_server || !msg.smtp_port || !msg.smtp_user || !msg.smtp_pass) {\n    node.error('SMTP configuration is incomplete.', msg);\n    return null;\n}\n\nconst transporter = nodemailer.createTransport({\n    host: msg.smtp_server,\n    port: parseInt(msg.smtp_port, 10),\n    secure: msg.smtp_port == 465, // true for 465, false for other ports\n    auth: {\n        user: msg.smtp_user,\n        pass: msg.smtp_pass\n    }\n});\n\nconst mailOptions = {\n    from: `\"Error Notifier\" <${msg.smtp_user}>`,\n    to: msg.alert_email,\n    subject: msg.subject || '🚨 AI Validation Failed',\n    text: msg.body || msg.error\n};\n\ntransporter.sendMail(mailOptions, (error, info) => {\n    if (error) {\n        node.error('Failed to send error email: ' + error.message, msg);\n    } else {\n        node.log('Error email sent: ' + info.response);\n    }\n});\n\nreturn null;\n",
         "outputs": 0,
         "noerr": 0,
         "x": 1750,
@@ -958,6 +883,12 @@ create_subflows() {
             "type": "num",
             "value": "5",
             "required": true
+        },
+        {
+            "name": "TIME_WINDOW",
+            "type": "num",
+            "value": "60",
+            "required": true
         }
     ],
     "color": "#a6bbcf"
@@ -989,7 +920,6 @@ backups/
 # Testing
 /tests/
 
-# Monitoring
 /monitoring/
 
 /subflows/
@@ -1134,3 +1064,4 @@ EOF
 create_readme() {
     cat > "$README_FILE" <<'EOF'
 # Node-RED Automation
+
