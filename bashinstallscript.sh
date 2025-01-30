@@ -1,43 +1,82 @@
 #!/bin/bash
 
+# =============================================================================
+# Script Name: setup-node-red-automation.sh
+# Description: Automates the setup of a Node-RED environment for AI-driven
+#              code analysis, validation, and deployment with GitHub integration
+#              and notifications via Slack and email.
+# Author: Your Name
+# License: MIT
+# =============================================================================
+
 # Exit immediately if a command exits with a non-zero status
 set -e
 
-# Function to display error messages
+# Variables
+PROJECT_DIR="node-red-automation"
+LOG_FILE="setup.log"
+ENV_FILE=".env"
+README_FILE="README.md"
+GITIGNORE_FILE=".gitignore"
+PACKAGE_JSON_FILE="package.json"
+FLOW_DIR="flows"
+CONFIG_DIR="config"
+SRC_DIR="src"
+
+# =============================================================================
+# Function Definitions
+# =============================================================================
+
+# Function to log messages with timestamps
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" | tee -a "$LOG_FILE"
+}
+
+# Function to display error messages and exit
 error_exit() {
-    echo "Error: $1" >&2
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - ERROR: $1" | tee -a "$LOG_FILE" >&2
     exit 1
 }
 
-# Check if Node.js is installed
-if ! command -v node &> /dev/null; then
-    error_exit "Node.js is not installed. Please install it from https://nodejs.org/"
-fi
+# Function to check if a command exists
+check_command() {
+    command -v "$1" >/dev/null 2>&1 || error_exit "$1 is not installed. Please install it and rerun the script."
+}
 
-# Check if npm is installed
-if ! command -v npm &> /dev/null; then
-    error_exit "npm is not installed. Please install it along with Node.js."
-fi
+# Function to create directory if it doesn't exist
+create_dir() {
+    if [ ! -d "$1" ]; then
+        mkdir -p "$1" || error_exit "Failed to create directory $1."
+        log "Created directory: $1"
+    else
+        log "Directory already exists: $1"
+    fi
+}
 
-# Optional: Check for specific Node.js version
-REQUIRED_NODE_VERSION="14.0.0"
-INSTALLED_NODE_VERSION=$(node -v | sed 's/v//')
-if [ "$(printf '%s\n' "$REQUIRED_NODE_VERSION" "$INSTALLED_NODE_VERSION" | sort -V | head -n1)" != "$REQUIRED_NODE_VERSION" ]; then 
-    error_exit "Node.js version $REQUIRED_NODE_VERSION or higher is required. You have $INSTALLED_NODE_VERSION."
-fi
+# Function to initialize npm and install dependencies
+init_npm() {
+    if [ ! -f "$PACKAGE_JSON_FILE" ]; then
+        npm init -y || error_exit "npm initialization failed."
+        log "Initialized npm in $PROJECT_DIR."
+    else
+        log "npm already initialized in $PROJECT_DIR."
+    fi
 
-# Set project directory
-PROJECT_DIR="node-red-automation"
+    # Install necessary packages
+    log "Installing npm dependencies..."
+    npm install node-red dotenv node-red-node-email node-red-node-slack node-red-contrib-github language-detect diff nodemailer --save || error_exit "npm install failed."
+    log "npm dependencies installed successfully."
+}
 
-# Create project directory structure
-mkdir -p "$PROJECT_DIR/flows" "$PROJECT_DIR/config" "$PROJECT_DIR/src"
-
-# Navigate to project directory
-cd "$PROJECT_DIR"
-
-# Create a .env file for environment variables
-cat > .env <<'EOF'
+# Function to create .env file with placeholders
+create_env_file() {
+    if [ ! -f "$ENV_FILE" ]; then
+        cat > "$ENV_FILE" <<'EOF'
+# ================================
 # Node-RED Environment Variables
+# ================================
+
+# Server Configuration
 NODE_RED_PORT=1880
 
 # GitHub Configuration
@@ -71,18 +110,21 @@ PROCESSING_RANGE_START=3000
 PROCESSING_RANGE_END=5000
 RANGE_INCREMENT=2000
 MAX_ITERATIONS_PER_CHATBOT=10
+
 EOF
+        log "Created .env file with placeholders."
+    else
+        log ".env file already exists. Skipping creation."
+    fi
+}
 
-# Install dotenv and other necessary packages
-npm init -y
-npm install node-red dotenv node-red-node-email node-red-node-slack node-red-contrib-github language-detect diff nodemailer
-
-# Create package.json with required dependencies
-cat > package.json <<'EOF'
+# Function to create package.json with specified content
+create_package_json() {
+    cat > "$PACKAGE_JSON_FILE" <<'EOF'
 {
   "name": "node-red-automation",
   "version": "1.0.0",
-  "description": "Automated Node-RED workflow for AI-driven code analysis and deployment.",
+  "description": "Automated Node-RED workflow for AI-driven code analysis, validation, and deployment.",
   "main": "index.js",
   "scripts": {
     "start": "node-red --userDir ./flows --flows flow.json"
@@ -101,9 +143,14 @@ cat > package.json <<'EOF'
   "license": "MIT"
 }
 EOF
+    log "Created package.json with required dependencies."
+}
 
-# Create flow configuration with enhanced structure and comments
-cat > flows/flow.json <<'EOF'
+# Function to create flow.json with enhanced configuration
+create_flow_json() {
+    create_dir "$FLOW_DIR"
+
+    cat > "$FLOW_DIR/flow.json" <<'EOF'
 [
     {
         "id": "schedule-trigger",
@@ -268,7 +315,7 @@ cat > flows/flow.json <<'EOF'
         "type": "function",
         "z": "flow",
         "name": "Code Extractor",
-        "func": "const fs = require('fs');\n\nconst start = parseInt(msg.processing_range_start, 10);\nconst end = parseInt(msg.processing_range_end, 10);\nconst increment = parseInt(msg.range_increment, 10);\nconst codeFile = msg.initial_code_file;\n\ntry {\n    const code = fs.readFileSync(codeFile, 'utf8');\n    const lines = code.split('\\n');\n    \n    // Initialize ranges array\n    msg.ranges = [];\n    let currentStart = start;\n    let currentEnd = end;\n\n    while (currentStart < lines.length) {\n        let adjustedStart = currentStart;\n        let adjustedEnd = currentEnd;\n        \n        // Adjust start to include full function\n        while (adjustedStart > 0 && !/\\b(def |class |async def )/.test(lines[adjustedStart - 1])) {\n            adjustedStart--;\n        }\n        \n        // Adjust end to include full function\n        while (adjustedEnd < lines.length && !/\\b(return|raise |except |finally:)/.test(lines[adjustedEnd])) {\n            adjustedEnd++;\n        }\n        \n        // Push the adjusted range\n        msg.ranges.push({ start: adjustedStart, end: adjustedEnd });\n\n        // Increment for next range\n        currentStart += increment;\n        currentEnd += increment;\n    }\n\n    // Initialize range processing index\n    msg.current_range_index = 0;\n\n    return msg;\n} catch (err) {\n    msg.error = 'Code extraction failed: ' + err.message;\n    return [null, msg];\n}",
+        "func": "const fs = require('fs');\n\nconst start = parseInt(msg.processing_range_start, 10);\nconst end = parseInt(msg.processing_range_end, 10);\nconst increment = parseInt(msg.range_increment, 10);\nconst codeFile = msg.initial_code_file;\n\ntry {\n    const code = fs.readFileSync(codeFile, 'utf8');\n    const lines = code.split('\\n');\n    \n    // Initialize ranges array\n    msg.ranges = [];\n    let currentStart = start;\n    let currentEnd = end;\n\n    while (currentStart < lines.length) {\n        let adjustedStart = currentStart;\n        let adjustedEnd = currentEnd;\n        \n        // Adjust start to include full function\n        while (adjustedStart > 0 && !/\\b(def |class |async def )/.test(lines[adjustedStart - 1])) {\n            adjustedStart--;\n        }\n        \n        // Adjust end to include full function\n        while (adjustedEnd < lines.length && !/\\b(return|raise |except |finally:)/.test(lines[adjustedEnd])) {\n            adjustedEnd++;\n        }\n        \n        // Push the adjusted range\n        msg.ranges.push({ start: adjustedStart, end: adjustedEnd });\n\n        # Increment for next range\n        currentStart += increment;\n        currentEnd += increment;\n    }\n\n    # Initialize range processing index\n    msg.current_range_index = 0;\n\n    return msg;\n} catch (err) {\n    msg.error = 'Code extraction failed: ' + err.message;\n    return [null, msg];\n}",
         "outputs": 2,
         "noerr": 0,
         "x": 550,
@@ -288,31 +335,31 @@ cat > flows/flow.json <<'EOF'
         "z": "flow",
         "name": "Range Iterator",
         "func": `
-    if (msg.current_range_index < msg.ranges.length) {
-        const currentRange = msg.ranges[msg.current_range_index];
-        msg.current_range = currentRange;
-        
-        // Extract code chunk based on current range
-        const fs = require('fs');
-        const code = fs.readFileSync(msg.initial_code_file, 'utf8');
-        const lines = code.split('\\n');
-        const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');
-        
-        msg.code_chunk = codeChunk;
-        msg.iteration = 0;
-        msg.max_iterations = parseInt(msg.max_iterations_per_chatbot, 10) * 2; // Assuming 2 chatbots
-        msg.chatbots = [\n
-            { name: "Chatbot A", api_url: msg.chatbot_a_api_url, api_key: msg.chatbot_a_api_key },\n
-            { name: "Chatbot B", api_url: msg.chatbot_b_api_url, api_key: msg.chatbot_b_api_key }\n
-        ];
-        msg.current_chatbot_index = 0;
-        
-        return msg;
-    } else {
-        // All ranges processed
-        return [msg, null];
-    }
-    `,
+        if (msg.current_range_index < msg.ranges.length) {
+            const currentRange = msg.ranges[msg.current_range_index];
+            msg.current_range = currentRange;
+            
+            // Extract code chunk based on current range
+            const fs = require('fs');
+            const code = fs.readFileSync(msg.initial_code_file, 'utf8');
+            const lines = code.split('\\n');
+            const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');
+            
+            msg.code_chunk = codeChunk;
+            msg.iteration = 0;
+            msg.max_iterations = parseInt(msg.max_iterations_per_chatbot, 10) * msg.chatbots.length;
+            msg.chatbots = [
+                { name: "Chatbot A", api_url: msg.chatbot_a_api_url, api_key: msg.chatbot_a_api_key },
+                { name: "Chatbot B", api_url: msg.chatbot_b_api_url, api_key: msg.chatbot_b_api_key }
+            ];
+            msg.current_chatbot_index = 0;
+            
+            return msg;
+        } else {
+            // All ranges processed
+            return [msg, null];
+        }
+        `,
         "outputs": 2,
         "noerr": 0,
         "x": 750,
@@ -332,19 +379,19 @@ cat > flows/flow.json <<'EOF'
         "z": "flow",
         "name": "Prompt Engine",
         "func": `
-    const prompts = [\n
-        'Check this code for errors, make sure it is bug free, add any functionality you think is important.',\n
-        'Identify all logic flaws.',\n
-        'Optimize performance bottlenecks.',\n
-        'Enhance security best practices.',\n
-        'Refactor redundant code.',\n
-        'Check compliance with coding standards.'\n
-    ];\n
-    \n
-    const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];\n
-    msg.prompt = \`\${randomPrompt}\\n\\n\${msg.language || 'Python'} code:\\n\${msg.code_chunk}\\n\\nContext:\\n\${msg.context || ''}\`;\n
-    return msg;
-    `,
+        const prompts = [
+            'Check this code for errors, make sure it is bug free, add any functionality you think is important.',
+            'Identify all logic flaws.',
+            'Optimize performance bottlenecks.',
+            'Enhance security best practices.',
+            'Refactor redundant code.',
+            'Check compliance with coding standards.'
+        ];
+        
+        const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+        msg.prompt = \`\${randomPrompt}\\n\\n\${msg.language || 'Python'} code:\\n\${msg.code_chunk}\\n\\nContext:\\n\${msg.context || ''}\`;
+        return msg;
+        `,
         "outputs": 1,
         "noerr": 0,
         "x": 950,
@@ -361,19 +408,20 @@ cat > flows/flow.json <<'EOF'
         "z": "flow",
         "name": "AI Gateway Configurator",
         "func": `
-    const chatbot = msg.chatbots[msg.current_chatbot_index % msg.chatbots.length];\n
-    msg.url = chatbot.api_url;\n
-    msg.headers.Authorization = \`Bearer \${chatbot.api_key}\`;\n
-    msg.body = JSON.stringify({\n
-        model: "gpt-4",\n
-        messages: [\n
-            { role: "system", content: "You are a senior code reviewer." },\n
-            { role: "user", content: msg.prompt }\n
-        ]\n
-    });\n
-    \n
-    return msg;
-    `,
+        const chatbot = msg.chatbots[msg.current_chatbot_index % msg.chatbots.length];
+        
+        msg.url = chatbot.api_url;
+        msg.headers.Authorization = \`Bearer \${chatbot.api_key}\`;
+        msg.body = JSON.stringify({
+            model: "gpt-4",
+            messages: [
+                { role: "system", content: "You are a senior code reviewer." },
+                { role: "user", content: msg.prompt }
+            ]
+        });
+        
+        return msg;
+        `,
         "outputs": 1,
         "noerr": 0,
         "x": 1150,
@@ -416,29 +464,29 @@ cat > flows/flow.json <<'EOF'
         "z": "flow",
         "name": "AI Response Processor",
         "func": `
-    const response = msg.payload;
-    let correctedCode = '';
-    
-    if (response && response.choices && response.choices.length > 0) {
-        correctedCode = response.choices[0].message.content.trim();
-    } else {
-        msg.error = 'Invalid response from AI chatbot.';
-        return [null, msg];
-    }
-    
-    msg.corrected_code = correctedCode;
-    
-    // Increment iteration count
-    msg.iteration += 1;
-    
-    // Update code chunk with corrected code
-    msg.code_chunk = correctedCode;
-    
-    // Alternate to next chatbot
-    msg.current_chatbot_index += 1;
-    
-    return msg;
-    `,
+        const response = msg.payload;
+        let correctedCode = '';
+        
+        if (response && response.choices && response.choices.length > 0) {
+            correctedCode = response.choices[0].message.content.trim();
+        } else {
+            msg.error = 'Invalid response from AI chatbot.';
+            return [null, msg];
+        }
+        
+        msg.corrected_code = correctedCode;
+        
+        // Increment iteration count
+        msg.iteration += 1;
+        
+        // Update code chunk with corrected code
+        msg.code_chunk = correctedCode;
+        
+        // Alternate to next chatbot
+        msg.current_chatbot_index += 1;
+        
+        return msg;
+        `,
         "outputs": 2,
         "noerr": 0,
         "x": 1550,
@@ -458,12 +506,12 @@ cat > flows/flow.json <<'EOF'
         "z": "flow",
         "name": "Check Iterations",
         "func": `
-    if (msg.iteration < msg.max_iterations) {
-        return msg;
-    } else {
-        return [null, msg];
-    }
-    `,
+        if (msg.iteration < msg.max_iterations) {
+            return msg;
+        } else {
+            return [null, msg];
+        }
+        `,
         "outputs": 2,
         "noerr": 0,
         "x": 1750,
@@ -483,20 +531,20 @@ cat > flows/flow.json <<'EOF'
         "z": "flow",
         "name": "Finalize Corrected Code",
         "func": `
-    const fs = require('fs');
-    
-    const finalizedCode = msg.corrected_code;
-    const finalizedFile = msg.finalized_code_file;
-    
-    try {
-        fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');
-        msg.commit_message = "Automated Code Update: Finalized corrections for range " + msg.current_range.start + "-" + msg.current_range.end;
-        return msg;
-    } catch (err) {
-        msg.error = 'Finalization failed: ' + err.message;
-        return [null, msg];
-    }
-    `,
+        const fs = require('fs');
+        
+        const finalizedCode = msg.corrected_code;
+        const finalizedFile = msg.finalized_code_file;
+        
+        try {
+            fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');
+            msg.commit_message = "Automated Code Update: Finalized corrections for range " + msg.current_range.start + "-" + msg.current_range.end;
+            return msg;
+        } catch (err) {
+            msg.error = 'Finalization failed: ' + err.message;
+            return [null, msg];
+        }
+        `,
         "outputs": 2,
         "noerr": 0,
         "x": 1950,
@@ -551,9 +599,9 @@ cat > flows/flow.json <<'EOF'
         "z": "flow",
         "name": "Range Iterator Increment",
         "func": `
-    msg.current_range_index += 1;
-    return msg;
-    `,
+        msg.current_range_index += 1;
+        return msg;
+        `,
         "outputs": 1,
         "noerr": 0,
         "x": 1750,
@@ -570,17 +618,10 @@ cat > flows/flow.json <<'EOF'
         "z": "flow",
         "name": "Finalization",
         "func": `
-    const fs = require('fs');
-    
-    // Reset processing_range_start and processing_range_end for next batch
-    msg.processing_range_start += parseInt(msg.range_increment, 10);
-    msg.processing_range_end += parseInt(msg.range_increment, 10);
-    
-    // Save updated range to .env or a config file if needed
-    // Alternatively, manage ranges within the flow itself
-    
-    return msg;
-    `,
+        // Placeholder for any finalization steps if needed
+        // For example, resetting variables or logging
+        return msg;
+        `,
         "outputs": 1,
         "noerr": 0,
         "x": 1550,
@@ -597,35 +638,41 @@ cat > flows/flow.json <<'EOF'
         "z": "flow",
         "name": "Error Handler",
         "func": `
-    const nodemailer = require('nodemailer');
-    
-    const transporter = nodemailer.createTransport({
-        host: msg.smtp_server,
-        port: parseInt(msg.smtp_port, 10),
-        secure: false, // true for 465, false for other ports
-        auth: {
-            user: msg.smtp_user,
-            pass: msg.smtp_pass
+        const nodemailer = require('nodemailer');
+        
+        // Validate SMTP configuration
+        if (!msg.smtp_server || !msg.smtp_port || !msg.smtp_user || !msg.smtp_pass) {
+            node.error('SMTP configuration is incomplete.', msg);
+            return null;
         }
-    });
-    
-    const mailOptions = {
-        from: msg.smtp_user,
-        to: msg.alert_email,
-        subject: msg.subject || '🚨 AI Validation Failed',
-        text: msg.body || msg.error
-    };
-    
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-            node.error('Failed to send error email: ' + error.message, msg);
-        } else {
-            node.log('Error email sent: ' + info.response);
-        }
-    });
-    
-    return null;
-    `,
+        
+        const transporter = nodemailer.createTransport({
+            host: msg.smtp_server,
+            port: parseInt(msg.smtp_port, 10),
+            secure: msg.smtp_port == 465, // true for 465, false for other ports
+            auth: {
+                user: msg.smtp_user,
+                pass: msg.smtp_pass
+            }
+        });
+        
+        const mailOptions = {
+            from: `"Error Notifier" <${msg.smtp_user}>`,
+            to: msg.alert_email,
+            subject: msg.subject || '🚨 AI Validation Failed',
+            text: msg.body || msg.error
+        };
+        
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                node.error('Failed to send error email: ' + error.message, msg);
+            } else {
+                node.log('Error email sent: ' + info.response);
+            }
+        });
+        
+        return null;
+        `,
         "outputs": 0,
         "noerr": 0,
         "x": 1750,
@@ -634,21 +681,30 @@ cat > flows/flow.json <<'EOF'
     }
 ]
 EOF
+    log "Created flow.json with enhanced configuration."
+}
 
-# Create a README file with setup instructions
-cat > README.md <<'EOF'
+# Function to create README.md with detailed setup instructions
+create_readme() {
+    cat > "$README_FILE" <<'EOF'
 # Node-RED Automation
 
 ## Description
 Automated Node-RED workflow for AI-driven code analysis, validation, and deployment to GitHub with notifications via Slack and email alerts.
 
+## Features
+- **Dynamic Code Range Selection:** Automatically extracts and processes specific ranges of code.
+- **Multiple Chatbot Interactions:** Alternates between multiple AI chatbots for adversarial testing and validation.
+- **Recursive Validation:** Iteratively refines code through multiple AI validation cycles.
+- **GitHub Integration:** Commits validated and corrected code to a specified GitHub repository.
+- **Notifications:**
+  - **Slack:** Sends success notifications upon successful GitHub commits.
+  - **Email:** Sends error alerts for any failures during the workflow.
+- **Secure Configuration Management:** Utilizes environment variables to manage sensitive information securely.
+
 ## Setup Instructions
 
-1. **Configure Environment Variables:**
-   - Open the `.env` file located in the `node-red-automation` directory.
-   - Fill in the required values for GitHub, OpenAI, Email, Slack, and Chatbot configurations.
-   - Ensure that the `.env` file is kept secure and **not** committed to version control.
-
-2. **Install Dependencies:**
-   ```bash
-   npm install
+### 1. Clone the Repository
+```bash
+git clone https://github.com/your-org/node-red-automation.git
+cd node-red-automation
