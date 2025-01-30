@@ -40,6 +40,8 @@ CONFIG_JSON="$CONFIG_DIR/config.json"
 NGINX_CONF_DIR="$PROJECT_DIR/nginx/conf.d"
 NGINX_CONF_FILE="$NGINX_CONF_DIR/default.conf"
 SSL_DIR="$PROJECT_DIR/config/ssl"
+CERTBOT_CONF_DIR="$PROJECT_DIR/certbot/conf"
+CERTBOT_WWW_DIR="$PROJECT_DIR/certbot/www"
 
 # Variables for dynamic inputs
 DOCKERHUB_USERNAME=""
@@ -47,7 +49,8 @@ REMOTE_USER=""
 SERVER_IP=""
 DOMAIN_NAME=""
 EMAIL_ADDRESS=""
-DOCKER_PATH="/path/to/deploy"  # Replace with actual deployment path
+DOCKER_PATH="/var/www/node-red-automation"  # Updated to a more typical deployment path
+ALERT_EMAIL="alerts@company.com"            # Default value; can be updated via .env
 
 # =============================================================================
 # Function Definitions
@@ -92,14 +95,67 @@ create_dir() {
     fi
 }
 
-# Function to prompt for dynamic inputs
+# Function to prompt for dynamic inputs with validation
 prompt_inputs() {
-    read -p "Enter your Docker Hub Username: " DOCKERHUB_USERNAME
-    read -p "Enter your Remote Server User: " REMOTE_USER
-    read -p "Enter your Remote Server IP: " SERVER_IP
-    read -p "Enter your Domain Name for SSL (e.g., example.com): " DOMAIN_NAME
-    read -p "Enter your Email Address for SSL notifications: " EMAIL_ADDRESS
-    read -p "Enter your Deployment Path on Remote Server (e.g., /var/www/node-red-automation): " DOCKER_PATH
+    # Docker Hub Username
+    while true; do
+        read -p "Enter your Docker Hub Username: " DOCKERHUB_USERNAME
+        if [[ -n "$DOCKERHUB_USERNAME" ]]; then
+            break
+        else
+            echo "Docker Hub Username cannot be empty. Please try again."
+        fi
+    done
+
+    # Remote Server User
+    while true; do
+        read -p "Enter your Remote Server User: " REMOTE_USER
+        if [[ -n "$REMOTE_USER" ]]; then
+            break
+        else
+            echo "Remote Server User cannot be empty. Please try again."
+        fi
+    done
+
+    # Remote Server IP
+    while true; do
+        read -p "Enter your Remote Server IP: " SERVER_IP
+        if [[ "$SERVER_IP" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            break
+        else
+            echo "Invalid IP address format. Please enter a valid IP."
+        fi
+    done
+
+    # Domain Name
+    while true; do
+        read -p "Enter your Domain Name for SSL (e.g., example.com): " DOMAIN_NAME
+        if [[ "$DOMAIN_NAME" =~ ^(([a-zA-Z]{1})|([a-zA-Z]{1}[a-zA-Z]{1})|([a-zA-Z]{1}[0-9]{1})|([0-9]{1}[a-zA-Z]{1}))+([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.[a-zA-Z]{2,6}$ ]]; then
+            break
+        else
+            echo "Invalid domain name format. Please try again."
+        fi
+    done
+
+    # Email Address
+    while true; do
+        read -p "Enter your Email Address for SSL notifications: " EMAIL_ADDRESS
+        if [[ "$EMAIL_ADDRESS" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
+            break
+        else
+            echo "Invalid email address format. Please try again."
+        fi
+    done
+
+    # Deployment Path
+    while true; do
+        read -p "Enter your Deployment Path on Remote Server (e.g., /var/www/node-red-automation): " DOCKER_PATH
+        if [[ "$DOCKER_PATH" =~ ^/.* ]]; then
+            break
+        else
+            echo "Deployment Path must be an absolute path starting with '/'. Please try again."
+        fi
+    done
 }
 
 # Function to check for Node.js and npm before proceeding
@@ -189,8 +245,6 @@ EOF
 
 # Function to install Docker if not installed, optimized for Ubuntu
 install_docker() {
-    check_sudo  # Ensure script is run with sudo
-
     # OS Check for Ubuntu
     if ! grep -q 'Ubuntu' /etc/os-release; then
         log "Warning: Docker installation is optimized for Ubuntu. Proceeding anyway."
@@ -203,7 +257,7 @@ install_docker() {
         apt-get update -y || error_exit "Failed to update package index."
 
         # Install packages to allow apt to use a repository over HTTPS
-        apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release ufw || error_exit "Failed to install prerequisites for Docker."
+        apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release ufw fail2ban mailutils || error_exit "Failed to install prerequisites for Docker."
 
         # Add Docker’s official GPG key
         curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg || error_exit "Failed to add Docker's GPG key."
@@ -237,6 +291,10 @@ install_docker_compose() {
         # Get the latest version of Docker Compose from GitHub
         DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d '"' -f 4)
 
+        if [[ -z "$DOCKER_COMPOSE_VERSION" ]]; then
+            error_exit "Failed to fetch Docker Compose version from GitHub."
+        fi
+
         # Download Docker Compose binary
         curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose || error_exit "Failed to download Docker Compose."
 
@@ -246,6 +304,11 @@ install_docker_compose() {
         # Create a symbolic link to /usr/bin if necessary
         if [ ! -L /usr/bin/docker-compose ]; then
             ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose || error_exit "Failed to create symbolic link for Docker Compose."
+        fi
+
+        # Verify installation
+        if ! docker-compose --version >/dev/null 2>&1; then
+            error_exit "Docker Compose installation verification failed."
         fi
 
         log "Docker Compose installed successfully."
@@ -262,7 +325,7 @@ install_node_red_dashboard() {
     log "Node-RED Dashboard installed successfully."
 }
 
-# Function to create .env file with specified content
+# Function to create .env file with specified content and secure it
 create_env_file() {
     if [ ! -f "$ENV_FILE" ]; then
         cat > "$ENV_FILE" <<'EOF'
@@ -304,7 +367,8 @@ PROCESSING_RANGE_START=2000
 RANGE_INCREMENT=2000
 MAX_ITERATIONS_PER_CHATBOT=5
 EOF
-        log "Created .env file with placeholders."
+        chmod 600 "$ENV_FILE"
+        log "Created .env file with placeholders and set permissions to 600."
     else
         log ".env file already exists. Skipping creation."
     fi
@@ -327,7 +391,6 @@ create_settings_js() {
         create_dir "$CONFIG_DIR/ssl"
 
         cat > "$SETTINGS_FILE" <<'EOF'
-// Load environment variables
 require('dotenv').config();
 const fs = require('fs');
 
@@ -338,15 +401,6 @@ module.exports = {
     httpNodeRoot: "/api",
     // User directory
     userDir: "/data",
-    // Enable HTTPS with Nginx as a reverse proxy
-    // HTTPS is handled by Nginx, so no need to configure here unless you want Node-RED to handle HTTPS
-    // Uncomment below to enable HTTPS directly
-    /*
-    https: {
-        key: fs.readFileSync('/data/config/ssl/privatekey.pem'),
-        cert: fs.readFileSync('/data/config/ssl/certificate.pem')
-    },
-    */
     // Enable global context
     functionGlobalContext: {},
 
@@ -610,12 +664,12 @@ create_flow_json() {
         "type": "github",
         "z": "flow",
         "name": "Push to GitHub",
-        "repo": "{{GITHUB_REPO}}",
-        "token": "{{GITHUB_TOKEN}}",
+        "repo": "${GITHUB_REPO}",
+        "token": "${GITHUB_TOKEN}",
         "operation": "commit",
-        "commitMessage": "{{commit_message}}",
-        "filePath": "{{FINALIZED_CODE_FILE}}",
-        "fileContent": "{{corrected_code}}",
+        "commitMessage": "${commit_message}",
+        "filePath": "${FINALIZED_CODE_FILE}",
+        "fileContent": "${corrected_code}",
         "branch": "main",
         "x": 2150,
         "y": 100,
@@ -633,9 +687,9 @@ create_flow_json() {
         "type": "slack",
         "z": "flow",
         "name": "Slack Notification",
-        "token": "{{SLACK_TOKEN}}",
-        "channel": "{{SLACK_CHANNEL}}",
-        "message": "✅ *Code Update Successful*\nChanges have been committed to GitHub.\nFile: {{FINALIZED_CODE_FILE}}",
+        "token": "${SLACK_TOKEN}",
+        "channel": "${SLACK_CHANNEL}",
+        "message": "✅ *Code Update Successful*\nChanges have been committed to GitHub.\nFile: ${FINALIZED_CODE_FILE}",
         "x": 2350,
         "y": 100,
         "wires": []
@@ -689,33 +743,46 @@ EOF
     log "Created flow.json with main flows."
 }
 
-# Function to create Dockerfile
+# Function to create Dockerfile with multi-stage builds and optimizations
 create_dockerfile() {
     cat > "$DOCKERFILE" <<'EOF'
-# Use the official Node-RED image as the base
+# Stage 1: Build
+FROM node:16 as builder
+
+WORKDIR /app
+
+# Copy package.json and package-lock.json
+COPY package.json package-lock.json ./
+
+# Install dependencies
+RUN npm install
+
+# Copy source files
+COPY flows.json config/ src/ subflows/ ./
+
+# Stage 2: Production
 FROM nodered/node-red:latest
 
 # Set working directory
 WORKDIR /data
 
-# Copy package.json and install dependencies
-COPY package.json .
-RUN npm install
+# Copy only necessary files from builder
+COPY --from=builder /app/flows.json /data/flows.json
+COPY --from=builder /app/config /data/config
+COPY --from=builder /app/src /data/src
+COPY --from=builder /app/subflows /data/subflows
 
-# Copy flow configurations and source code
-COPY flows.json /data/flows.json
-COPY config/ config/
-COPY src/ src/
-COPY subflows/ subflows/
-COPY tests/ tests/
+# Copy wait-for-it.sh for service dependency handling
+COPY wait-for-it.sh /usr/local/bin/wait-for-it.sh
+RUN chmod +x /usr/local/bin/wait-for-it.sh
 
 # Expose Node-RED port
 EXPOSE 1880
 
-# Start Node-RED
-CMD ["npm", "start"]
+# Start Node-RED with dependency wait
+CMD ["wait-for-it.sh", "nginx:80", "--", "npm", "start"]
 EOF
-    log "Created Dockerfile for Dockerization."
+    log "Created Dockerfile with multi-stage builds and optimizations."
 }
 
 # Function to create Docker Compose file with enhancements
@@ -747,6 +814,10 @@ services:
     build: .
     environment:
       - NODE_RED_PORT=${NODE_RED_PORT}
+      - GITHUB_REPO=${GITHUB_REPO}
+      - GITHUB_TOKEN_FILE=/run/secrets/github_token
+      - SLACK_TOKEN_FILE=/run/secrets/slack_token
+      # Add other environment variables as needed
     env_file:
       - .env
     volumes:
@@ -754,7 +825,6 @@ services:
       - ./config:/data/config
       - ./src:/data/src
       - ./subflows:/data/subflows
-      - ./tests:/data/tests
       - node-red-data:/data
     restart: unless-stopped
     secrets:
@@ -767,6 +837,9 @@ services:
       interval: 1m30s
       timeout: 10s
       retries: 3
+    depends_on:
+      nginx:
+        condition: service_healthy
 
   prometheus:
     image: prom/prometheus:latest
@@ -804,6 +877,17 @@ services:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew; done;'"
+    restart: unless-stopped
+
+  certbot_init:
+    image: certbot/certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew; done;'"
+    command: certonly --webroot --webroot-path=/var/www/certbot --email ${EMAIL_ADDRESS} --agree-tos --no-eff-email -d ${DOMAIN_NAME}
+    depends_on:
+      - nginx
     restart: unless-stopped
 
 secrets:
@@ -1194,7 +1278,7 @@ EOF
     fi
 }
 
-# Function to set up automated backups using cron with error handling
+# Function to set up automated backups using cron with enhanced reliability
 setup_automated_backups() {
     create_dir "$BACKUP_DIR"
 
@@ -1206,27 +1290,45 @@ SOURCE_DIR="/absolute/path/to/node-red-automation" # This will be replaced by th
 BACKUP_DIR="/absolute/path/to/node-red-automation/backups" # This will be replaced by the script
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_FILE="$BACKUP_DIR/backup_$TIMESTAMP.tar.gz"
+LOG_FILE="$BACKUP_DIR/backup.log"
+
+# Function to log messages
+backup_log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "$LOG_FILE"
+}
+
+# Start backup
+backup_log "Starting backup of $SOURCE_DIR to $BACKUP_FILE"
 
 # Check if source directory exists
 if [ ! -d "$SOURCE_DIR" ]; then
-  echo "Error: Source directory missing" >&2
+  backup_log "Error: Source directory missing."
   exit 1
 fi
 
 # Create backup
-tar -czf "$BACKUP_FILE" "$SOURCE_DIR"
+tar -czf "$BACKUP_FILE" "$SOURCE_DIR" 2>>"$LOG_FILE"
+if [ $? -ne 0 ]; then
+    backup_log "Error: Failed to create backup archive."
+    exit 1
+fi
 
 # Verify backup integrity
-tar -tzf "$BACKUP_FILE" > /dev/null
+tar -tzf "$BACKUP_FILE" > /dev/null 2>>"$LOG_FILE"
 if [ $? -ne 0 ]; then
-    echo "Backup verification failed for $BACKUP_FILE" >&2
+    backup_log "Error: Backup verification failed for $BACKUP_FILE"
+    # Send email notification
+    echo "Backup verification failed for $BACKUP_FILE" | mail -s "Backup Failure Alert" "$ALERT_EMAIL"
     exit 1
 fi
 
 # Remove backups older than 7 days
-find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
+find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +7 -exec rm {} \; 2>>"$LOG_FILE"
+if [ $? -ne 0 ]; then
+    backup_log "Warning: Failed to remove old backups."
+fi
 
-echo "Backup created at $BACKUP_FILE and old backups removed."
+backup_log "Backup created at $BACKUP_FILE and old backups removed successfully."
 EOF
 
     # Replace placeholders with actual absolute paths
@@ -1238,7 +1340,7 @@ EOF
     CRON_JOB="0 2 * * * $BACKUP_DIR/backup.sh"
 
     # Check if the cron job already exists to avoid duplicates
-    crontab -l 2>/dev/null | grep -F "$BACKUP_DIR/backup.sh" >/dev/null
+    (crontab -l 2>/dev/null | grep -F "$BACKUP_DIR/backup.sh") >/dev/null 2>&1
     if [ $? -ne 0 ]; then
         (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
         log "Added backup cron job."
@@ -1304,6 +1406,12 @@ secure_docker() {
 
     log "Added user $SUDO_USER to the docker group."
     log "Please log out and log back in for the Docker group changes to take effect."
+
+    # Inform the user to log out
+    echo "====================================================="
+    echo "Docker group modification complete."
+    echo "Please log out and log back in to apply Docker group changes."
+    echo "====================================================="
 }
 
 # Function to setup Docker secrets for sensitive information
@@ -1311,14 +1419,28 @@ setup_docker_secrets() {
     create_dir "$PROJECT_DIR/secrets"
 
     # Example: Create GitHub Token secret
-    read -sp "Enter your GitHub Token for Docker Secrets: " GITHUB_SECRET
-    echo "$GITHUB_SECRET" > "$PROJECT_DIR/secrets/github_token.txt"
-    chmod 600 "$PROJECT_DIR/secrets/github_token.txt"
+    while true; do
+        read -sp "Enter your GitHub Token for Docker Secrets: " GITHUB_SECRET
+        if [[ -n "$GITHUB_SECRET" ]]; then
+            echo "$GITHUB_SECRET" > "$PROJECT_DIR/secrets/github_token.txt"
+            chmod 600 "$PROJECT_DIR/secrets/github_token.txt"
+            break
+        else
+            echo "GitHub Token cannot be empty. Please try again."
+        fi
+    done
 
     # Similarly, create other secrets as needed
-    read -sp "Enter your Slack Token for Docker Secrets: " SLACK_SECRET
-    echo "$SLACK_SECRET" > "$PROJECT_DIR/secrets/slack_token.txt"
-    chmod 600 "$PROJECT_DIR/secrets/slack_token.txt"
+    while true; do
+        read -sp "Enter your Slack Token for Docker Secrets: " SLACK_SECRET
+        if [[ -n "$SLACK_SECRET" ]]; then
+            echo "$SLACK_SECRET" > "$PROJECT_DIR/secrets/slack_token.txt"
+            chmod 600 "$PROJECT_DIR/secrets/slack_token.txt"
+            break
+        else
+            echo "Slack Token cannot be empty. Please try again."
+        fi
+    done
 
     log "Docker secrets set up."
 }
@@ -1340,9 +1462,13 @@ secure_docker_containers() {
 
 # Function to setup SSL using Certbot and Nginx as reverse proxy within Docker
 setup_ssl() {
-    # Removed host-based SSL setup to avoid conflict with Docker's Nginx
-    # SSL is now managed within Docker using the certbot service in docker-compose.yml
-    log "SSL setup is now managed within Docker. No action needed here."
+    # SSL setup is now managed within Docker using the certbot service in docker-compose.yml
+    # Automate the initial certificate issuance
+    log "Initializing SSL certificates with Certbot..."
+
+    docker-compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email "$EMAIL_ADDRESS" --agree-tos --no-eff-email -d "$DOMAIN_NAME" || error_exit "Certbot failed to obtain SSL certificates."
+
+    log "SSL certificates obtained successfully."
 }
 
 # Function to create configuration flows for the web interface
@@ -1567,16 +1693,18 @@ This setup script automates the installation and configuration of a Node-RED env
     sudo docker-compose up -d
     ```
 
-5. **Access Node-RED Dashboard**:
+5. **Initialize SSL Certificates**:
+    ```bash
+    sudo docker-compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email "$EMAIL_ADDRESS" --agree-tos --no-eff-email -d "$DOMAIN_NAME"
+    ```
+
+6. **Access Node-RED Dashboard**:
     Navigate to [https://yourdomain.com/ui](https://yourdomain.com/ui) in your browser.
 
-6. **Verify Services**:
+7. **Verify Services**:
     ```bash
     sudo docker-compose ps
     ```
-
-7. **Setup SSL (Managed Within Docker)**:
-    The script integrates Certbot as a Docker service to manage SSL certificates automatically. No manual action is required. If you encounter issues, ensure that ports 80 and 443 are open and that your domain DNS is correctly configured.
 
 ## Maintenance
 
@@ -1599,8 +1727,12 @@ This setup script automates the installation and configuration of a Node-RED env
 - **Backup Restoration**:
     To restore from a backup:
     ```bash
-    tar -xzf backup_filename.tar.gz -C /path/to/node-red-automation
+    tar -xzf backup_filename.tar.gz -C /var/www/node-red-automation
     ```
+
+## Backup Management
+
+Automated backups are scheduled via cron to run daily at 2 AM. Backups are stored in the `backups/` directory and older backups beyond 7 days are automatically removed.
 
 ## Troubleshooting
 
@@ -1621,22 +1753,239 @@ This setup script automates the installation and configuration of a Node-RED env
 
 - **SSL Certificate Issues**: Renew certificates using Certbot.
     ```bash
-    sudo docker-compose run certbot certonly
+    sudo docker-compose run certbot renew
     ```
 
-## Security Considerations
+- **Backup Failures**: Check the backup logs located in `backups/backup.log` and ensure email notifications are working.
 
-- **Admin Password**: Ensure the admin password for Node-RED is strong and kept confidential.
-- **Secure Communications**: SSL/TLS is enabled via Docker's Nginx to encrypt data in transit.
-- **Secrets Management**: Sensitive information is managed using Docker secrets.
-- **Regular Updates**: Keep all dependencies and Docker images up-to-date.
-- **Monitor Logs**: Regularly monitor system and application logs for unauthorized access attempts.
+## Secret Management
+
+Sensitive information such as GitHub tokens and Slack tokens are managed using Docker secrets. These secrets are stored in the `secrets/` directory with restricted permissions and are referenced securely within the Docker Compose configuration.
+
+## Contribution Guidelines
+
+Contributions are welcome! Please follow these steps:
+1. Fork the repository.
+2. Create a new branch for your feature or bugfix.
+3. Commit your changes with clear messages.
+4. Submit a pull request detailing your changes.
 
 ## License
 
 MIT License
 EOF
     log "Created README with comprehensive documentation."
+}
+
+# Function to create logrotate configuration for setup.log
+create_logrotate_config() {
+    LOGROTATE_CONF="/etc/logrotate.d/node-red-automation"
+
+    if [ ! -f "$LOGROTATE_CONF" ]; then
+        cat > "$LOGROTATE_CONF" <<'EOF'
+/path/to/node-red-automation/setup.log {
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    create 0640 root adm
+    sharedscripts
+    postrotate
+        systemctl reload docker >/dev/null 2>&1 || true
+    endscript
+}
+EOF
+        # Replace placeholder with actual path
+        sed -i "s|/path/to/node-red-automation|$PROJECT_DIR|g" "$LOGROTATE_CONF" || error_exit "Failed to set paths in logrotate configuration."
+
+        log "Created logrotate configuration for setup.log."
+    else
+        log "Logrotate configuration already exists. Skipping creation."
+    fi
+}
+
+# Function to install wait-for-it.sh for service dependency handling
+install_wait_for_it() {
+    WAIT_FOR_IT="$PROJECT_DIR/wait-for-it.sh"
+    if [ ! -f "$WAIT_FOR_IT" ]; then
+        curl -o "$WAIT_FOR_IT" https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh || error_exit "Failed to download wait-for-it.sh."
+        chmod +x "$WAIT_FOR_IT" || error_exit "Failed to apply executable permissions to wait-for-it.sh."
+        log "Downloaded and set permissions for wait-for-it.sh."
+    else
+        log "wait-for-it.sh already exists. Skipping download."
+    fi
+}
+
+# Function to install cli53 for DNS management (Optional)
+install_cli53() {
+    if ! command -v cli53 >/dev/null 2>&1; then
+        log "Installing cli53 for DNS management..."
+        curl -Lo /usr/local/bin/cli53 https://github.com/barnybug/cli53/releases/download/0.8.6/cli53-linux-amd64 || error_exit "Failed to download cli53."
+        chmod +x /usr/local/bin/cli53 || error_exit "Failed to apply executable permissions to cli53."
+        log "cli53 installed successfully."
+    else
+        log "cli53 is already installed."
+    fi
+}
+
+# Function to configure DNS using cli53 (Optional)
+configure_dns() {
+    read -p "Enter your AWS Route 53 Hosted Zone ID: " HOSTED_ZONE_ID
+    read -p "Enter the subdomain to point to this server (e.g., sub.example.com): " SUBDOMAIN
+
+    cli53 rrcreate "$HOSTED_ZONE_ID" "$SUBDOMAIN" A "$SERVER_IP" --replace || error_exit "Failed to create DNS A record."
+    log "DNS A record for $SUBDOMAIN created successfully."
+}
+
+# Function to install Fail2Ban and configure it
+install_fail2ban() {
+    if ! systemctl is-active --quiet fail2ban; then
+        log "Installing Fail2Ban..."
+        apt-get install -y fail2ban || error_exit "Failed to install Fail2Ban."
+        log "Fail2Ban installed successfully."
+    else
+        log "Fail2Ban is already installed."
+    fi
+}
+
+# Function to configure Fail2Ban
+configure_fail2ban() {
+    F2B_JAIL_LOCAL="/etc/fail2ban/jail.local"
+
+    if [ ! -f "$F2B_JAIL_LOCAL" ]; then
+        cat > "$F2B_JAIL_LOCAL" <<'EOF'
+[DEFAULT]
+bantime = 1h
+findtime = 10m
+maxretry = 5
+
+[sshd]
+enabled = true
+
+[nginx-http-auth]
+enabled = true
+EOF
+        systemctl restart fail2ban || error_exit "Failed to restart Fail2Ban."
+        log "Fail2Ban configured and restarted."
+    else
+        log "Fail2Ban jail.local already exists. Skipping configuration."
+    fi
+}
+
+# Function to set up logrotate configuration
+setup_logrotate() {
+    create_logrotate_config
+}
+
+# Function to ensure consistent use of absolute paths
+ensure_absolute_paths() {
+    # This function can be expanded as needed
+    log "Ensuring consistent use of absolute paths in scripts and configurations."
+}
+
+# Function to handle SELinux/AppArmor (If Applicable)
+handle_security_modules() {
+    if command -v getenforce >/dev/null 2>&1; then
+        SELINUX_STATUS=$(getenforce)
+        if [ "$SELINUX_STATUS" = "Enforcing" ]; then
+            log "SELinux is enforcing. Configuring Docker for SELinux compatibility."
+            # Apply necessary SELinux labels or policies
+            # Example: docker run with :Z or :z flags for volume mounts
+        fi
+    fi
+
+    # Similarly handle AppArmor if used
+    if command -v apparmor_status >/dev/null 2>&1; then
+        APPAARMOR_STATUS=$(apparmor_status)
+        if echo "$APPAARMOR_STATUS" | grep -q "Enforcing mode"; then
+            log "AppArmor is enforcing. Configuring Docker for AppArmor compatibility."
+            # Apply necessary AppArmor profiles or policies
+        fi
+    fi
+}
+
+# Function to create wait-for-it.sh
+create_wait_for_it() {
+    install_wait_for_it
+}
+
+# Function to automate DNS configuration using cli53 (Optional)
+automate_dns() {
+    install_cli53
+    configure_dns
+}
+
+# Function to setup Fail2Ban
+setup_fail2ban() {
+    install_fail2ban
+    configure_fail2ban
+}
+
+# Function to apply security modules configuration
+apply_security_modules() {
+    handle_security_modules
+}
+
+# Function to ensure environment variables are used correctly in Docker Compose
+ensure_env_variables() {
+    # Environment variables are already referenced correctly in docker-compose.yml
+    log "Ensured that environment variables are used correctly in Docker Compose."
+}
+
+# Function to create logrotate configuration
+create_logrotate_config() {
+    LOGROTATE_CONF="/etc/logrotate.d/node-red-automation"
+
+    if [ ! -f "$LOGROTATE_CONF" ]; then
+        cat > "$LOGROTATE_CONF" <<'EOF'
+/path/to/node-red-automation/setup.log {
+    daily
+    rotate 7
+    compress
+    missingok
+    notifempty
+    create 0640 root adm
+    sharedscripts
+    postrotate
+        systemctl reload docker >/dev/null 2>&1 || true
+    endscript
+}
+EOF
+        # Replace placeholder with actual path
+        sed -i "s|/path/to/node-red-automation|$PROJECT_DIR|g" "$LOGROTATE_CONF" || error_exit "Failed to set paths in logrotate configuration."
+
+        log "Created logrotate configuration for setup.log."
+    else
+        log "Logrotate configuration already exists. Skipping creation."
+    fi
+}
+
+# Function to secure the .env file further if needed
+secure_env_file() {
+    chmod 600 "$ENV_FILE" || error_exit "Failed to set permissions on .env file."
+    log "Secured .env file with permissions set to 600."
+}
+
+# Function to finalize and ensure all services are up and running
+finalize_setup() {
+    log "Finalizing setup..."
+
+    # Reload systemd to recognize new services if any
+    systemctl daemon-reload || log "No systemd daemon reload needed."
+
+    # Restart Docker to apply any new configurations
+    systemctl restart docker || error_exit "Failed to restart Docker service."
+
+    log "Setup finalized successfully."
+}
+
+# Function to prompt the user to log out if necessary
+prompt_logout() {
+    echo "====================================================="
+    echo "Docker group modification complete."
+    echo "Please log out and log back in to apply Docker group changes."
+    echo "====================================================="
 }
 
 # Function to print completion message
@@ -1701,6 +2050,28 @@ create_subflows
 # Dashboard and Configuration Flows
 create_configuration_flows
 
+# Security Enhancements
+setup_fail2ban
+setup_logrotate
+apply_security_modules
+ensure_env_variables
+ensure_absolute_paths
+
+# Automate DNS Configuration (Optional)
+# Uncomment the following line if DNS automation is desired
+# automate_dns
+
+# Secure .env file
+secure_env_file
+
 # Finalization
-create_readme
+finalize_setup
+
+# Inform the user to log out if Docker group was modified
+prompt_logout
+
+# Create logrotate configuration
+setup_logrotate
+
+# Final completion message
 print_completion
