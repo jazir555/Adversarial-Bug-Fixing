@@ -1,0 +1,266 @@
+{
+  "name": "AI Code Validation Workflow v5 - Enterprise Grade",
+  "nodes": [
+    {
+      "parameters": {
+        "interval": [
+          {
+            "field": "cronExpression",
+            "expression": "*/30 * * * *"
+          }
+        ]
+      },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [100, 100]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "github_repo",
+              "value": "your-org/your-repo"
+            },
+            {
+              "name": "code_file",
+              "value": "src/main.py"
+            },
+            {
+              "name": "max_iterations",
+              "value": "10"
+            },
+            {
+              "name": "min_change_percent",
+              "value": "2.5"
+            },
+            {
+              "name": "language",
+              "value": "python"
+            }
+          ],
+          "number": [
+            {
+              "name": "parallel_ranges",
+              "value": "3"
+            },
+            {
+              "name": "retry_attempts",
+              "value": "3"
+            }
+          ]
+        }
+      },
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "position": [300, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "const fs = require('fs').promises;\nconst detect = require('language-detect');\n\nasync function main() {\n  const code = await fs.readFile($node['Config'].json.code_file, 'utf8');\n  const language = detect($node['Config'].json.code_file) || $node['Config'].json.language;\n  \n  return {\n    json: {\n      originalCode: code,\n      language,\n      ranges: await detectCodeBlocks(code, language)\n    }\n  };\n}\n\nasync function detectCodeBlocks(code, lang) {\n  // Language-specific block detection logic\n  const blocks = [];\n  // ... (implementation for different languages)\n  return blocks;\n}\n\nreturn main();"
+      },
+      "name": "Code Analyzer",
+      "type": "n8n-nodes-base.function",
+      "position": [500, 100]
+    },
+    {
+      "parameters": {
+        "batchSize": "={{$node['Config'].json.parallel_ranges}}",
+        "options": {
+          "reset": true
+        }
+      },
+      "name": "Parallel Processor",
+      "type": "n8n-nodes-base.splitInBatches",
+      "position": [700, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "const LANG_CONFIG = {\n  python: {\n    start: /(def |class |async def )/,\n    end: /(return|raise |except |finally:)/\n  },\n  javascript: {\n    start: /(function |class |const )/,\n    end: /(return|throw |catch|})/\n  }\n};\n\nconst adjustRange = (code, range, lang) => {\n  const config = LANG_CONFIG[lang] || LANG_CONFIG.python;\n  const lines = code.split('\\n');\n  let [start, end] = [range.start, range.end];\n  \n  // Smart expansion with boundary checks\n  while (start > 0 && !config.start.test(lines[start - 1])) start--;\n  while (end < lines.length && !config.end.test(lines[end])) end++;\n  \n  return {\n    adjustedRange: { start, end },\n    codeChunk: lines.slice(start, end + 1).join('\\n'),\n    context: lines.slice(Math.max(0, start - 5), end + 5).join('\\n')\n  };\n};\n\nreturn {\n  json: {\n    ...$json,\n    ...adjustRange($json.originalCode, $json.range, $json.language)\n  }\n};"
+      },
+      "name": "Smart Range Adjuster",
+      "type": "n8n-nodes-base.function",
+      "position": [900, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "const PROMPT_STRATEGIES = {\n  iterative: `Analyze this {{language}} code considering previous feedback:\n{{history}}\n\nCurrent code:\n{{code}}\n\nContext:\n{{context}}`,\n  security: `Audit for security vulnerabilities in this {{language}} code...`\n};\n\nconst getPrompt = (strategy, context) => {\n  return PROMPT_STRATEGIES[strategy]\n    .replace('{{language}}', context.language)\n    .replace('{{code}}', context.codeChunk)\n    .replace('{{context}}', context.context)\n    .replace('{{history}}', context.validationHistory);\n};\n\nreturn {\n  json: {\n    ...$json,\n    prompt: getPrompt('iterative', $json)\n  }\n};"
+      },
+      "name": "Prompt Engine",
+      "type": "n8n-nodes-base.function",
+      "position": [1100, 100]
+    },
+    {
+      "parameters": {
+        "options": {
+          "retryOnFail": true,
+          "maxTries": "={{$node['Config'].json.retry_attempts}}"
+        },
+        "rules": [
+          {
+            "interval": "minute",
+            "limit": 30,
+            "key": "api_global_limit"
+          }
+        ]
+      },
+      "name": "API Gateway",
+      "type": "n8n-nodes-base.throttle",
+      "position": [1300, 100]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "credentialType": "openAiApi",
+        "resource": "chat",
+        "operation": "completion",
+        "model": "gpt-4-1106-preview",
+        "temperature": 0.2,
+        "messages": "={{[{ role: 'system', content: 'You are a senior code reviewer' }, { role: 'user', content: $json.prompt }]}}"
+      },
+      "name": "OpenAI Analyst",
+      "type": "n8n-nodes-base.openAi",
+      "position": [1500, 50]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "credentialType": "anthropicApi",
+        "resource": "message",
+        "operation": "create",
+        "model": "claude-3-opus-20240229",
+        "maxTokens": 4000,
+        "messages": "={{[{ role: 'user', content: $json.prompt }]}}"
+      },
+      "name": "Anthropic Analyst",
+      "type": "n8n-nodes-base.anthropic",
+      "position": [1500, 150]
+    },
+    {
+      "parameters": {
+        "functionCode": "const { createParser } = require('@parser/code-analysis');\n\nconst parseResponse = (response, lang) => {\n  const parser = createParser(lang);\n  const analysis = parser.analyze(response);\n  \n  if (!analysis.isValid) {\n    throw new Error('Invalid code structure: ' + analysis.errors.join(', '));\n  }\n  \n  return {\n    cleanCode: analysis.code,\n    metrics: analysis.metrics,\n    warnings: analysis.warnings\n  };\n};\n\nconst result = parseResponse($input.all()[0].json, $json.language);\n\nreturn {\n  json: {\n    ...$json,\n    ...result,\n    validationHistory: [\n      ...$json.validationHistory,\n      {\n        iteration: $json.iteration + 1,\n        timestamp: new Date().toISOString(),\n        metrics: result.metrics\n      }\n    ]\n  }\n};"
+      },
+      "name": "Code Validator",
+      "type": "n8n-nodes-base.function",
+      "position": [1700, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "const DIFF_STRATEGIES = {\n  semantic: (a, b) => {\n    // Advanced AST-based comparison\n    return calculateSemanticDiff(a, b);\n  },\n  line: (a, b) => Math.abs(a.split('\\n').length - b.split('\\n').length)\n};\n\nconst changeImpact = DIFF_STRATEGIES.semantic(\n  $json.originalCodeChunk,\n  $json.cleanCode\n);\n\nreturn {\n  json: {\n    ...$json,\n    changeImpact,\n    shouldContinue: changeImpact > $node['Config'].json.min_change_percent\n  }\n};"
+      },
+      "name": "Change Analyzer",
+      "type": "n8n-nodes-base.function",
+      "position": [1900, 100]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{$json.shouldContinue}}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Iteration Controller",
+      "type": "n8n-nodes-base.if",
+      "position": [2100, 100]
+    },
+    {
+      "parameters": {
+        "functionCode": "const { codeIntegrate } = require('@integrator/core');\n\nreturn codeIntegrate(\n  $json.originalCode,\n  $json.cleanCode,\n  $json.adjustedRange,\n  $json.language\n);"
+      },
+      "name": "Code Integrator",
+      "type": "n8n-nodes-base.function",
+      "position": [2300, 100]
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "operation": "create",
+        "filePath": "versions/{{$json.range.start}}-{{$json.range.end}}/v{{$json.iteration}}_{{timestamp}}.py",
+        "content": "={{$json.finalCode}}",
+        "commitMessage": "AI Validation v{{$json.iteration}} [{{$json.changeImpact}}% impact]",
+        "options": {
+          "atomic": true
+        }
+      },
+      "name": "GitHub Versioner",
+      "type": "n8n-nodes-base.github",
+      "position": [2500, 100]
+    },
+    {
+      "parameters": {
+        "workflow": "monitoringWorkflowId",
+        "parameters": "={{$json}}"
+      },
+      "name": "Quality Gate",
+      "type": "n8n-nodes-base.n8nApi",
+      "position": [2700, 100]
+    },
+    {
+      "parameters": {
+        "channel": "C123456",
+        "text": "✅ Success: Processed range {{$json.range.start}}-{{$json.range.end}}\nImpact: {{$json.changeImpact}}%\nIterations: {{$json.iteration}}",
+        "blocks": "={{[{\n  type: 'section',\n  text: {\n    type: 'mrkdwn',\n    text: '*Code Validation Complete*\\nView commit: <{{$node['GitHub Versioner'].json.html_url}}|GitHub>'\n  }\n}]}}"
+      },
+      "name": "Slack Notifier",
+      "type": "n8n-nodes-base.slack",
+      "position": [2900, 100]
+    },
+    {
+      "parameters": {
+        "mode": "internal"
+      },
+      "name": "Error Handler",
+      "type": "n8n-nodes-base.errorTrigger",
+      "position": [2500, 300]
+    },
+    {
+      "parameters": {
+        "subject": "🚨 Validation Failed: {{$json.error.context.range}}",
+        "body": "Error: {{$json.error.message}}\n\nStack: {{$json.error.stack}}",
+        "to": "dev-ops@company.com",
+        "options": {
+          "priority": "high"
+        }
+      },
+      "name": "Alert System",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [2700, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {"main": [[{"node": "Config", "type": "main", "index": 0}]]},
+    "Config": {"main": [[{"node": "Code Analyzer", "type": "main", "index": 0}]]},
+    "Code Analyzer": {"main": [[{"node": "Parallel Processor", "type": "main", "index": 0}]]},
+    "Parallel Processor": {"main": [[{"node": "Smart Range Adjuster", "type": "main", "index": 0}]]},
+    "Smart Range Adjuster": {"main": [[{"node": "Prompt Engine", "type": "main", "index": 0}]]},
+    "Prompt Engine": {"main": [[{"node": "API Gateway", "type": "main", "index": 0}]]},
+    "API Gateway": {
+      "main": [
+        [{"node": "OpenAI Analyst", "type": "main", "index": 0}],
+        [{"node": "Anthropic Analyst", "type": "main", "index": 0}]
+      ]
+    },
+    "OpenAI Analyst": {"main": [[{"node": "Code Validator", "type": "main", "index": 0}]]},
+    "Anthropic Analyst": {"main": [[{"node": "Code Validator", "type": "main", "index": 0}]]},
+    "Code Validator": {"main": [[{"node": "Change Analyzer", "type": "main", "index": 0}]]},
+    "Change Analyzer": {"main": [[{"node": "Iteration Controller", "type": "main", "index": 0}]]},
+    "Iteration Controller": {
+      "main": [
+        [{"node": "Prompt Engine", "type": "main", "index": 0}],
+        [{"node": "Code Integrator", "type": "main", "index": 0}]
+      ]
+    },
+    "Code Integrator": {"main": [[{"node": "GitHub Versioner", "type": "main", "index": 0}]]},
+    "GitHub Versioner": {
+      "main": [
+        [{"node": "Quality Gate", "type": "main", "index": 0}],
+        [{"node": "Slack Notifier", "type": "main", "index": 0}]
+      ]
+    },
+    "Error Handler": {"main": [[{"node": "Alert System", "type": "main", "index": 0}]]}
+  }
+}
