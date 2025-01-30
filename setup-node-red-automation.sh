@@ -1090,6 +1090,7 @@ jobs:
           docker-compose -f \${{ secrets.DOCKER_PATH }}/docker-compose.yml pull
           docker-compose -f \${{ secrets.DOCKER_PATH }}/docker-compose.yml up -d --remove-orphans
 EOF
+
     log "Created GitHub Actions CI/CD workflow."
 }
 
@@ -1240,7 +1241,6 @@ backups/
 # Subflows
 /subflows/
 
-# Node-RED Settings
 /config/settings.js
 
 # SSL Certificates
@@ -1349,462 +1349,6 @@ EOF
     fi
 }
 
-# Function to implement security enhancements
-implement_security() {
-    # 1. API Rate Limiting: Ensure rate-limiter subflow is included in flows.json
-    # Assuming rate-limiter subflow is already created in subflows directory
-
-    # 2. Firewall Setup with UFW
-    setup_firewall
-
-    # 3. Docker Security Best Practices
-    secure_docker
-    secure_docker_containers
-
-    # 4. Secrets Management using Docker Secrets
-    setup_docker_secrets
-
-    # 5. Data Encryption: Handled via Nginx as a reverse proxy with SSL
-    # SSL setup is now handled within Docker, so no further action needed here
-
-    log "Implemented security enhancements."
-}
-
-# Function to setup firewall using UFW
-setup_firewall() {
-    log "Configuring UFW firewall..."
-
-    # Allow SSH
-    ufw allow 22/tcp
-
-    # Allow HTTP and HTTPS
-    ufw allow 80/tcp
-    ufw allow 443/tcp
-
-    # Allow Prometheus and Grafana
-    ufw allow 9090/tcp
-    ufw allow 3000/tcp
-
-    # Allow Node-RED port if accessed directly (optional)
-    ufw allow "$NODE_RED_PORT"/tcp
-
-    # Enable UFW
-    ufw --force enable
-
-    log "Firewall configured and UFW enabled."
-}
-
-# Function to secure Docker by adding the current user to the docker group
-secure_docker() {
-    log "Securing Docker..."
-
-    # Create docker group if it doesn't exist
-    groupadd docker || log "Docker group already exists."
-
-    # Add current user to docker group
-    usermod -aG docker "$SUDO_USER"
-
-    log "Added user $SUDO_USER to the docker group."
-    log "Please log out and log back in for the Docker group changes to take effect."
-
-    # Inform the user to log out
-    echo "====================================================="
-    echo "Docker group modification complete."
-    echo "Please log out and log back in to apply Docker group changes."
-    echo "====================================================="
-}
-
-# Function to setup Docker secrets for sensitive information
-setup_docker_secrets() {
-    create_dir "$PROJECT_DIR/secrets"
-
-    # Example: Create GitHub Token secret
-    while true; do
-        read -sp "Enter your GitHub Token for Docker Secrets: " GITHUB_SECRET
-        if [[ -n "$GITHUB_SECRET" ]]; then
-            echo "$GITHUB_SECRET" > "$PROJECT_DIR/secrets/github_token.txt"
-            chmod 600 "$PROJECT_DIR/secrets/github_token.txt"
-            break
-        else
-            echo "GitHub Token cannot be empty. Please try again."
-        fi
-    done
-
-    # Similarly, create other secrets as needed
-    while true; do
-        read -sp "Enter your Slack Token for Docker Secrets: " SLACK_SECRET
-        if [[ -n "$SLACK_SECRET" ]]; then
-            echo "$SLACK_SECRET" > "$PROJECT_DIR/secrets/slack_token.txt"
-            chmod 600 "$PROJECT_DIR/secrets/slack_token.txt"
-            break
-        else
-            echo "Slack Token cannot be empty. Please try again."
-        fi
-    done
-
-    log "Docker secrets set up."
-}
-
-# Function to secure Docker containers
-secure_docker_containers() {
-    # Ensure containers run with least privilege by adding security options in docker-compose.yml
-    # This was already partially handled in create_docker_compose()
-
-    # Example: Add security_opt and no-new-privileges to each service if not already present
-    # For demonstration, ensuring it's present for node-red
-    if ! grep -q "security_opt:" "$DOCKER_COMPOSE_FILE"; then
-        sed -i '/node-red:/a\ \ security_opt:\n\ \ \ \ - no-new-privileges:true' "$DOCKER_COMPOSE_FILE" || error_exit "Failed to apply security options to Docker Compose."
-        log "Applied Docker security best practices."
-    else
-        log "Docker security options already applied. Skipping."
-    fi
-}
-
-# Function to setup SSL using Certbot and Nginx as reverse proxy within Docker
-setup_ssl() {
-    # SSL setup is now managed within Docker using the certbot service in docker-compose.yml
-    # Automate the initial certificate issuance
-    log "Initializing SSL certificates with Certbot..."
-
-    docker-compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email "$EMAIL_ADDRESS" --agree-tos --no-eff-email -d "$DOMAIN_NAME" || error_exit "Certbot failed to obtain SSL certificates."
-
-    log "SSL certificates obtained successfully."
-}
-
-# Function to create configuration flows for the web interface
-create_configuration_flows() {
-    cat > "$PROJECT_DIR/configuration_flows.json" <<'EOF'
-[
-    {
-        "id": "config-ui",
-        "type": "tab",
-        "label": "Configuration UI",
-        "disabled": false,
-        "info": ""
-    },
-    {
-        "id": "ui_form",
-        "type": "ui_form",
-        "z": "config-ui",
-        "name": "Configuration Form",
-        "label": "Configure Bug Checking",
-        "group": "dashboard_group",
-        "order": 1,
-        "width": 0,
-        "height": 0,
-        "options": [
-            {
-                "label": "Prompts (JSON Array)",
-                "value": "PROMPTS",
-                "type": "textarea",
-                "required": true,
-                "rows": 6,
-                "cols": 50,
-                "placeholder": "Enter prompts as a JSON array"
-            },
-            {
-                "label": "GitHub Filename",
-                "value": "INITIAL_CODE_FILE",
-                "type": "text",
-                "required": true,
-                "placeholder": "e.g., src/main.py"
-            },
-            {
-                "label": "Finalized Filename",
-                "value": "FINALIZED_CODE_FILE",
-                "type": "text",
-                "required": true,
-                "placeholder": "e.g., src/main_final.py"
-            },
-            {
-                "label": "Processing Range Start (Line)",
-                "value": "PROCESSING_RANGE_START",
-                "type": "number",
-                "required": true,
-                "placeholder": "e.g., 2000"
-            },
-            {
-                "label": "Range Increment (Lines)",
-                "value": "RANGE_INCREMENT",
-                "type": "number",
-                "required": true,
-                "placeholder": "e.g., 2000"
-            },
-            {
-                "label": "Max Iterations per Chatbot",
-                "value": "MAX_ITERATIONS_PER_CHATBOT",
-                "type": "number",
-                "required": true,
-                "placeholder": "e.g., 5"
-            }
-        ],
-        "formValue": {},
-        "payload": "payload",
-        "topic": "config_update",
-        "x": 200,
-        "y": 100,
-        "wires": [
-            [
-                "save_config"
-            ]
-        ]
-    },
-    {
-        "id": "save_config",
-        "type": "file",
-        "z": "config-ui",
-        "name": "Save Config",
-        "filename": "/data/config/config.json",
-        "appendNewline": false,
-        "createDir": false,
-        "overwriteFile": "true",
-        "encoding": "utf8",
-        "x": 500,
-        "y": 100,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "load_config",
-        "type": "inject",
-        "z": "flow",
-        "name": "Load Config",
-        "props": [],
-        "repeat": "",
-        "crontab": "",
-        "once": true,
-        "topic": "",
-        "payloadType": "date",
-        "x": 200,
-        "y": 200,
-        "wires": [
-            [
-                "read_config"
-            ]
-        ]
-    },
-    {
-        "id": "read_config",
-        "type": "file in",
-        "z": "flow",
-        "name": "Read Config",
-        "filename": "/data/config/config.json",
-        "format": "utf8",
-        "sendError": false,
-        "x": 400,
-        "y": 200,
-        "wires": [
-            [
-                "update_flow_context"
-            ]
-        ]
-    },
-    {
-        "id": "update_flow_context",
-        "type": "change",
-        "z": "flow",
-        "name": "Update Flow Context",
-        "rules": [
-            {
-                "t": "set",
-                "p": "flow.config",
-                "to": "payload",
-                "toType": "jsonata"
-            }
-        ],
-        "action": "",
-        "property": "",
-        "from": "",
-        "to": "",
-        "reg": false,
-        "x": 600,
-        "y": 200,
-        "wires": [
-            []
-        ]
-    },
-    {
-        "id": "ui_dashboard",
-        "type": "ui_group",
-        "z": "",
-        "name": "Dashboard",
-        "tab": "dashboard_tab",
-        "order": 1,
-        "disp": true,
-        "width": "6",
-        "collapse": false
-    },
-    {
-        "id": "dashboard_tab",
-        "type": "ui_tab",
-        "z": "",
-        "name": "Configuration",
-        "icon": "dashboard",
-        "order": 1
-    }
-]
-EOF
-    log "Created configuration_flows.json for the web interface."
-}
-
-# Function to create README with comprehensive documentation
-create_readme() {
-    cat > "$README_FILE" <<'EOF'
-# Node-RED Automation Setup
-
-## Overview
-
-This setup script automates the installation and configuration of a Node-RED environment tailored for AI-driven code analysis and deployment automation. It integrates GitHub, Slack, email notifications, Dockerization, CI/CD pipelines, monitoring, testing, security enhancements, and a web-based configuration interface.
-
-## Prerequisites
-
-- **Operating System**: Ubuntu 20.04/22.04 LTS
-- **Node.js**: v16.x
-- **npm**
-- **sudo/root privileges**
-- **Domain Name**: For SSL certificate setup
-- **Docker Hub Account**: For storing Docker images
-
-## Setup Steps
-
-1. **Run the Setup Script**:
-    ```bash
-    sudo chmod +x setup-node-red-automation.sh
-    sudo ./setup-node-red-automation.sh
-    ```
-
-2. **Provide Required Inputs**:
-    - **Docker Hub Username**: Enter your Docker Hub username when prompted.
-    - **Remote Server User**: Enter the username for your remote server.
-    - **Remote Server IP**: Enter the IP address of your remote server.
-    - **Domain Name**: Provide your domain name for SSL setup.
-    - **Email Address**: Enter your email address for SSL notifications.
-    - **Deployment Path**: Enter the deployment path on your remote server (e.g., `/var/www/node-red-automation`).
-
-3. **Edit `.env` File**:
-    Replace all placeholders with your actual credentials.
-    ```bash
-    sudo nano node-red-automation/.env
-    ```
-
-4. **Start Docker Compose Services**:
-    ```bash
-    sudo docker-compose up -d
-    ```
-
-5. **Initialize SSL Certificates**:
-    ```bash
-    sudo docker-compose run --rm certbot certonly --webroot --webroot-path=/var/www/certbot --email "$EMAIL_ADDRESS" --agree-tos --no-eff-email -d "$DOMAIN_NAME"
-    ```
-
-6. **Access Node-RED Dashboard**:
-    Navigate to [https://yourdomain.com/ui](https://yourdomain.com/ui) in your browser.
-
-7. **Verify Services**:
-    ```bash
-    sudo docker-compose ps
-    ```
-
-## Maintenance
-
-- **Updating Services**:
-    ```bash
-    sudo docker-compose pull
-    sudo docker-compose up -d
-    ```
-
-- **Viewing Logs**:
-    ```bash
-    sudo docker-compose logs -f
-    ```
-
-- **Stopping Services**:
-    ```bash
-    sudo docker-compose down
-    ```
-
-- **Backup Restoration**:
-    To restore from a backup:
-    ```bash
-    tar -xzf backup_filename.tar.gz -C /var/www/node-red-automation
-    ```
-
-## Backup Management
-
-Automated backups are scheduled via cron to run daily at 2 AM. Backups are stored in the `backups/` directory and older backups beyond 7 days are automatically removed.
-
-## Troubleshooting
-
-- **Docker Issues**: Ensure Docker service is running.
-    ```bash
-    sudo systemctl status docker
-    ```
-
-- **Node-RED Access**: Check if Node-RED container is up and listening on the specified port.
-    ```bash
-    sudo docker-compose ps
-    ```
-
-- **Firewall Issues**: Verify UFW rules.
-    ```bash
-    sudo ufw status
-    ```
-
-- **SSL Certificate Issues**: Renew certificates using Certbot.
-    ```bash
-    sudo docker-compose run certbot renew
-    ```
-
-- **Backup Failures**: Check the backup logs located in `backups/backup.log` and ensure email notifications are working.
-
-## Secret Management
-
-Sensitive information such as GitHub tokens and Slack tokens are managed using Docker secrets. These secrets are stored in the `secrets/` directory with restricted permissions and are referenced securely within the Docker Compose configuration.
-
-## Contribution Guidelines
-
-Contributions are welcome! Please follow these steps:
-1. Fork the repository.
-2. Create a new branch for your feature or bugfix.
-3. Commit your changes with clear messages.
-4. Submit a pull request detailing your changes.
-
-## License
-
-MIT License
-EOF
-    log "Created README with comprehensive documentation."
-}
-
-# Function to create logrotate configuration for setup.log
-create_logrotate_config() {
-    LOGROTATE_CONF="/etc/logrotate.d/node-red-automation"
-
-    if [ ! -f "$LOGROTATE_CONF" ]; then
-        cat > "$LOGROTATE_CONF" <<'EOF'
-/path/to/node-red-automation/setup.log {
-    daily
-    rotate 7
-    compress
-    missingok
-    notifempty
-    create 0640 root adm
-    sharedscripts
-    postrotate
-        systemctl reload docker >/dev/null 2>&1 || true
-    endscript
-}
-EOF
-        # Replace placeholder with actual path
-        sed -i "s|/path/to/node-red-automation|$PROJECT_DIR|g" "$LOGROTATE_CONF" || error_exit "Failed to set paths in logrotate configuration."
-
-        log "Created logrotate configuration for setup.log."
-    else
-        log "Logrotate configuration already exists. Skipping creation."
-    fi
-}
-
 # Function to install wait-for-it.sh for service dependency handling
 install_wait_for_it() {
     WAIT_FOR_IT="$PROJECT_DIR/wait-for-it.sh"
@@ -1874,67 +1418,7 @@ EOF
 }
 
 # Function to set up logrotate configuration
-setup_logrotate() {
-    create_logrotate_config
-}
-
-# Function to ensure consistent use of absolute paths
-ensure_absolute_paths() {
-    # This function can be expanded as needed
-    log "Ensuring consistent use of absolute paths in scripts and configurations."
-}
-
-# Function to handle SELinux/AppArmor (If Applicable)
-handle_security_modules() {
-    if command -v getenforce >/dev/null 2>&1; then
-        SELINUX_STATUS=$(getenforce)
-        if [ "$SELINUX_STATUS" = "Enforcing" ]; then
-            log "SELinux is enforcing. Configuring Docker for SELinux compatibility."
-            # Apply necessary SELinux labels or policies
-            # Example: docker run with :Z or :z flags for volume mounts
-        fi
-    fi
-
-    # Similarly handle AppArmor if used
-    if command -v apparmor_status >/dev/null 2>&1; then
-        APPAARMOR_STATUS=$(apparmor_status)
-        if echo "$APPAARMOR_STATUS" | grep -q "Enforcing mode"; then
-            log "AppArmor is enforcing. Configuring Docker for AppArmor compatibility."
-            # Apply necessary AppArmor profiles or policies
-        fi
-    fi
-}
-
-# Function to create wait-for-it.sh
-create_wait_for_it() {
-    install_wait_for_it
-}
-
-# Function to automate DNS configuration using cli53 (Optional)
-automate_dns() {
-    install_cli53
-    configure_dns
-}
-
-# Function to setup Fail2Ban
-setup_fail2ban() {
-    install_fail2ban
-    configure_fail2ban
-}
-
-# Function to apply security modules configuration
-apply_security_modules() {
-    handle_security_modules
-}
-
-# Function to ensure environment variables are used correctly in Docker Compose
-ensure_env_variables() {
-    # Environment variables are already referenced correctly in docker-compose.yml
-    log "Ensured that environment variables are used correctly in Docker Compose."
-}
-
-# Function to create logrotate configuration
-create_logrotate_config() {
+setup_logrotate_config() {
     LOGROTATE_CONF="/etc/logrotate.d/node-red-automation"
 
     if [ ! -f "$LOGROTATE_CONF" ]; then
@@ -2030,7 +1514,8 @@ create_docker_compose
 install_node_red_dashboard
 
 # Security setup
-implement_security          # Integrate security flows into flows.json
+install_fail2ban
+configure_fail2ban
 
 # Automated Backups
 setup_automated_backups     # Now invoked
@@ -2048,18 +1533,10 @@ create_test_scripts
 create_subflows
 
 # Dashboard and Configuration Flows
-create_configuration_flows
+# Assuming create_configuration_flows is part of the additional script
 
-# Security Enhancements
-setup_fail2ban
-setup_logrotate
-apply_security_modules
-ensure_env_variables
-ensure_absolute_paths
-
-# Automate DNS Configuration (Optional)
-# Uncomment the following line if DNS automation is desired
-# automate_dns
+# Log rotation setup
+setup_logrotate_config
 
 # Secure .env file
 secure_env_file
@@ -2071,7 +1548,11 @@ finalize_setup
 prompt_logout
 
 # Create logrotate configuration
-setup_logrotate
+setup_logrotate_config
 
 # Final completion message
 print_completion
+
+# =============================================================================
+# End of Script
+# =============================================================================
