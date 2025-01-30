@@ -78,7 +78,7 @@ init_npm() {
     # Install necessary packages
     log "Installing npm dependencies..."
     cd "$PROJECT_DIR"
-    npm install node-red dotenv node-red-node-email node-red-node-slack node-red-contrib-github language-detect diff nodemailer jest mocha --save || error_exit "npm install failed."
+    npm install node-red dotenv node-red-node-email node-red-node-slack node-red-contrib-github language-detect diff nodemailer jest mocha bcrypt --save || error_exit "npm install failed."
     log "npm dependencies installed successfully."
 }
 
@@ -152,7 +152,8 @@ create_package_json() {
     "language-detect": "^1.1.0",
     "diff": "^5.1.0",
     "dotenv": "^16.0.0",
-    "nodemailer": "^6.9.0"
+    "nodemailer": "^6.9.0",
+    "bcrypt": "^5.1.0"
   },
   "devDependencies": {
     "jest": "^29.0.0",
@@ -799,7 +800,7 @@ EOF
 
 # Function to create GitHub Actions CI/CD workflow
 create_ci_cd_yaml() {
-    create_dir ".github/workflows"
+    create_dir "$PROJECT_DIR/.github/workflows"
 
     cat > "$CI_CD_YML" <<'EOF'
 name: CI/CD Pipeline
@@ -991,8 +992,8 @@ EOF
     chmod +x "$BACKUP_DIR/backup.sh"
 
     # Add cron job (runs daily at 2 AM)
-    CRON_JOB="0 2 * * * $(pwd)/$BACKUP_DIR/backup.sh"
-    (crontab -l 2>/dev/null | grep -v "$(pwd)/$BACKUP_DIR/backup.sh"; echo "$CRON_JOB") | crontab -
+    CRON_JOB="0 2 * * * $(pwd)/backups/backup.sh"
+    (crontab -l 2>/dev/null | grep -v "$(pwd)/backups/backup.sh"; echo "$CRON_JOB") | crontab -
     log "Set up automated backups with cron."
 }
 
@@ -1044,7 +1045,7 @@ EOF
 
     # 3. Access Controls
     # Locate the Node-RED settings.js file. By default, it's in ~/.node-red/
-    SETTINGS_DIR="$PROJECT_DIR/config"
+    SETTINGS_DIR="$CONFIG_DIR"
     SETTINGS_FILE="$SETTINGS_DIR/settings.js"
 
     create_dir "$SETTINGS_DIR"
