@@ -5,7 +5,8 @@
 # Description: Automates the setup of a Node-RED environment for AI-driven
 #              code analysis, validation, and deployment with GitHub integration,
 #              Slack notifications, email alerts, Dockerization, CI/CD pipelines,
-#              monitoring, testing, and security enhancements.
+#              monitoring, testing, security enhancements, and a web interface
+#              for configuration.
 # Author: Your Name
 # License: MIT
 # =============================================================================
@@ -35,6 +36,7 @@ BACKUP_DIR="$PROJECT_DIR/backups"
 MONITORING_DIR="$PROJECT_DIR/monitoring"
 SETTINGS_FILE="$CONFIG_DIR/settings.js"
 TMP_DIR="$PROJECT_DIR/tmp"  # Temporary directory for cleanup
+CONFIG_JSON="$CONFIG_DIR/config.json"
 
 # =============================================================================
 # Function Definitions
@@ -118,6 +120,7 @@ create_custom_package_json() {
     "node-red-node-email": "^1.0.0",
     "node-red-node-slack": "^1.0.0",
     "node-red-contrib-github": "^1.0.0",
+    "node-red-dashboard": "^3.0.0",
     "language-detect": "^2.0.0",
     "diff": "^5.0.0",
     "nodemailer": "^6.7.0",
@@ -205,7 +208,7 @@ print_completion() {
     echo "   $ nano $ENV_FILE"
     echo "2. Start Node-RED:"
     echo "   $ cd $PROJECT_DIR && npm start"
-    echo "3. Access dashboard: http://localhost:$(grep NODE_RED_PORT $ENV_FILE | cut -d= -f2)"
+    echo "3. Access dashboard: http://localhost:$(grep NODE_RED_PORT $ENV_FILE | cut -d= -f2)/ui"
     echo "============================================================"
 }
 
@@ -276,10 +279,10 @@ CHATBOT_B_API_KEY=your_chatbot_b_api_key
 # Processing Configuration
 INITIAL_CODE_FILE=src/main.py
 FINALIZED_CODE_FILE=src/main_final.py
-PROCESSING_RANGE_START=3000
-PROCESSING_RANGE_END=5000
+PROCESSING_RANGE_START=2000
+PROCESSING_RANGE_END=4000
 RANGE_INCREMENT=2000
-MAX_ITERATIONS_PER_CHATBOT=10
+MAX_ITERATIONS_PER_CHATBOT=5
 EOF
         log "Created .env file with placeholders."
     else
@@ -370,123 +373,9 @@ create_flow_json() {
         "rules": [
             {
                 "t": "set",
-                "p": "github_repo",
-                "to": "env.GITHUB_REPO",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "github_token",
-                "to": "env.GITHUB_TOKEN",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "initial_code_file",
-                "to": "env.INITIAL_CODE_FILE",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "finalized_code_file",
-                "to": "env.FINALIZED_CODE_FILE",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "processing_range_start",
-                "to": "env.PROCESSING_RANGE_START",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "processing_range_end",
-                "to": "env.PROCESSING_RANGE_END",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "range_increment",
-                "to": "env.RANGE_INCREMENT",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "max_iterations_per_chatbot",
-                "to": "env.MAX_ITERATIONS_PER_CHATBOT",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "openai_api_key",
-                "to": "env.OPENAI_API_KEY",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "slack_channel",
-                "to": "env.SLACK_CHANNEL",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "slack_token",
-                "to": "env.SLACK_TOKEN",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "alert_email",
-                "to": "env.ALERT_EMAIL",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "smtp_server",
-                "to": "env.SMTP_SERVER",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "smtp_port",
-                "to": "env.SMTP_PORT",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "smtp_user",
-                "to": "env.SMTP_USER",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "smtp_pass",
-                "to": "env.SMTP_PASS",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "chatbot_a_api_url",
-                "to": "env.CHATBOT_A_API_URL",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "chatbot_a_api_key",
-                "to": "env.CHATBOT_A_API_KEY",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "chatbot_b_api_url",
-                "to": "env.CHATBOT_B_API_URL",
-                "toType": "env"
-            },
-            {
-                "t": "set",
-                "p": "chatbot_b_api_key",
-                "to": "env.CHATBOT_B_API_KEY",
-                "toType": "env"
+                "p": "config",
+                "to": "$.flow.context.config",
+                "toType": "global"
             }
         ],
         "action": "",
@@ -507,7 +396,7 @@ create_flow_json() {
         "type": "function",
         "z": "flow",
         "name": "Code Extractor",
-        "func": "const fs = require('fs');\n\nconst start = parseInt(msg.processing_range_start, 10);\nconst end = parseInt(msg.processing_range_end, 10);\nconst increment = parseInt(msg.range_increment, 10);\nconst codeFile = msg.initial_code_file;\n\ntry {\n    const code = fs.readFileSync(codeFile, 'utf8');\n    const lines = code.split('\\n');\n    \n    // Initialize ranges array\n    msg.ranges = [];\n    let currentStart = start;\n    let currentEnd = end;\n\n    while (currentStart < lines.length) {\n        let adjustedStart = currentStart;\n        let adjustedEnd = currentEnd;\n\n        // Adjust start to include full function\n        while (adjustedStart > 0 && !/\\b(def |class |async def )/.test(lines[adjustedStart - 1])) {\n            adjustedStart--;\n        }\n\n        // Adjust end to include full function\n        while (adjustedEnd < lines.length && !/\\b(return|raise |except |finally:)/.test(lines[adjustedEnd])) {\n            adjustedEnd++;\n        }\n\n        // Push the adjusted range\n        msg.ranges.push({ start: adjustedStart, end: adjustedEnd });\n\n        // Increment for next range\n        currentStart += increment;\n        currentEnd += increment;\n    }\n\n    // Initialize range processing index\n    msg.current_range_index = 0;\n\n    return msg;\n} catch (err) {\n    msg.error = 'Code extraction failed: ' + err.message;\n    return [null, msg];\n}",
+        "func": "const fs = require('fs');\n\nconst config = msg.config;\nconst start = parseInt(config.PROCESSING_RANGE_START, 10);\nconst increment = parseInt(config.RANGE_INCREMENT, 10);\nconst codeFile = config.INITIAL_CODE_FILE;\n\ntry {\n    const code = fs.readFileSync(codeFile, 'utf8');\n    const lines = code.split('\\n');\n    \n    // Initialize ranges array\n    msg.ranges = [];\n    let currentStart = start;\n    let currentEnd = currentStart + increment;\n\n    while (currentStart < lines.length) {\n        let adjustedStart = currentStart;\n        let adjustedEnd = currentEnd;\n\n        // Adjust start to include full function\n        while (adjustedStart > 0 && !/\\b(def |class |async def )/.test(lines[adjustedStart - 1])) {\n            adjustedStart--;\n        }\n\n        // Adjust end to include full function\n        while (adjustedEnd < lines.length && !/\\b(return|raise |except |finally:)/.test(lines[adjustedEnd])) {\n            adjustedEnd++;\n        }\n\n        // Push the adjusted range\n        msg.ranges.push({ start: adjustedStart, end: adjustedEnd });\n\n        // Increment for next range\n        currentStart += increment;\n        currentEnd += increment;\n    }\n\n    // Initialize range processing index\n    msg.current_range_index = 0;\n\n    return msg;\n} catch (err) {\n    msg.error = 'Code extraction failed: ' + err.message;\n    return [null, msg];\n}",
         "outputs": 2,
         "noerr": 0,
         "x": 550,
@@ -526,7 +415,7 @@ create_flow_json() {
         "type": "function",
         "z": "flow",
         "name": "Range Iterator",
-        "func": "if (msg.current_range_index < msg.ranges.length) {\n    const currentRange = msg.ranges[msg.current_range_index];\n    msg.current_range = currentRange;\n    \n    // Extract code chunk based on current range\n    const fs = require('fs');\n    const code = fs.readFileSync(msg.initial_code_file, 'utf8');\n    const lines = code.split('\\n');\n    const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');\n    \n    msg.code_chunk = codeChunk;\n    msg.iteration = 0;\n    msg.chatbots = [\n        { name: \"Chatbot A\", api_url: msg.chatbot_a_api_url, api_key: msg.chatbot_a_api_key },\n        { name: \"Chatbot B\", api_url: msg.chatbot_b_api_url, api_key: msg.chatbot_b_api_key }\n    ];\n    msg.current_chatbot_index = 0;\n    \n    return msg;\n} else {\n    // All ranges processed\n    return [msg, null];\n}\n",
+        "func": "if (msg.current_range_index < msg.ranges.length) {\n    const currentRange = msg.ranges[msg.current_range_index];\n    msg.current_range = currentRange;\n    \n    // Extract code chunk based on current range\n    const fs = require('fs');\n    const code = fs.readFileSync(msg.config.INITIAL_CODE_FILE, 'utf8');\n    const lines = code.split('\\n');\n    const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');\n    \n    msg.code_chunk = codeChunk;\n    msg.iteration = 0;\n    msg.chatbots = [\n        { name: \"Chatbot A\", api_url: msg.config.CHATBOT_A_API_URL, api_key: msg.config.CHATBOT_A_API_KEY },\n        { name: \"Chatbot B\", api_url: msg.config.CHATBOT_B_API_URL, api_key: msg.config.CHATBOT_B_API_KEY }\n    ];\n    msg.current_chatbot_index = 0;\n    \n    return msg;\n} else {\n    // All ranges processed\n    return [msg, null];\n}\n",
         "outputs": 2,
         "noerr": 0,
         "x": 750,
@@ -545,7 +434,7 @@ create_flow_json() {
         "type": "function",
         "z": "flow",
         "name": "Prompt Engine",
-        "func": "const prompts = [\n    'Check this code for errors, make sure it is bug free, add any functionality you think is important.',\n    'Identify all logic flaws.',\n    'Optimize performance bottlenecks.',\n    'Enhance security best practices.',\n    'Refactor redundant code.',\n    'Check compliance with coding standards.'\n];\n\nconst randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];\nmsg.prompt = `${randomPrompt}\\n\\n${msg.language || 'Python'} code:\\n${msg.code_chunk}\\n\\nContext:\\n${msg.context || ''}`;\nreturn msg;\n",
+        "func": "const prompts = msg.config.PROMPTS;\n\nconst randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];\nmsg.prompt = `${randomPrompt}\\n\\n${msg.language || 'Python'} code:\\n${msg.code_chunk}\\n\\nContext:\\n${msg.context || ''}`;\nreturn msg;\n",
         "outputs": 1,
         "noerr": 0,
         "x": 950,
@@ -622,7 +511,7 @@ create_flow_json() {
         "type": "function",
         "z": "flow",
         "name": "Check Iterations",
-        "func": "if (msg.iteration < msg.max_iterations_per_chatbot) {\n    return msg;\n} else {\n    return [null, msg];\n}\n",
+        "func": "const config = msg.config;\nif (msg.iteration < config.MAX_ITERATIONS_PER_CHATBOT) {\n    return msg;\n} else {\n    return [null, msg];\n}\n",
         "outputs": 2,
         "noerr": 0,
         "x": 1750,
@@ -641,7 +530,7 @@ create_flow_json() {
         "type": "function",
         "z": "flow",
         "name": "Finalize Corrected Code",
-        "func": "const fs = require('fs');\n\nconst finalizedCode = msg.corrected_code;\nconst finalizedFile = msg.finalized_code_file;\n\ntry {\n    fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');\n    msg.commit_message = \"Automated Code Update: Finalized corrections for range \" + msg.current_range.start + \"-\" + msg.current_range.end;\n    return msg;\n} catch (err) {\n    msg.error = 'Finalization failed: ' + err.message;\n    return [null, msg];\n}\n",
+        "func": "const fs = require('fs');\n\nconst finalizedCode = msg.corrected_code;\nconst finalizedFile = msg.config.FINALIZED_CODE_FILE;\n\ntry {\n    fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');\n    msg.commit_message = \"Automated Code Update: Finalized corrections for range \" + msg.current_range.start + \"-\" + msg.current_range.end;\n    return msg;\n} catch (err) {\n    msg.error = 'Finalization failed: ' + err.message;\n    return [null, msg];\n}\n",
         "outputs": 2,
         "noerr": 0,
         "x": 1950,
@@ -727,7 +616,7 @@ create_flow_json() {
         "type": "function",
         "z": "flow",
         "name": "Error Handler",
-        "func": "const nodemailer = require('nodemailer');\n\n// Validate SMTP configuration\nif (!msg.smtp_server || !msg.smtp_port || !msg.smtp_user || !msg.smtp_pass) {\n    node.error('SMTP configuration is incomplete.', msg);\n    return null;\n}\n\nconst transporter = nodemailer.createTransport({\n    host: msg.smtp_server,\n    port: parseInt(msg.smtp_port, 10),\n    secure: msg.smtp_port == 465, // true for 465, false for other ports\n    auth: {\n        user: msg.smtp_user,\n        pass: msg.smtp_pass\n    }\n});\n\nconst mailOptions = {\n    from: \"Error Notifier\" <${msg.smtp_user}>,\n    to: msg.alert_email,\n    subject: msg.subject || '🚨 AI Validation Failed',\n    text: msg.body || msg.error\n};\n\ntransporter.sendMail(mailOptions, (error, info) => {\n    if (error) {\n        node.error('Failed to send error email: ' + error.message, msg);\n    } else {\n        node.log('Error email sent: ' + info.response);\n    }\n});\n\nreturn null;\n",
+        "func": "const nodemailer = require('nodemailer');\n\n// Validate SMTP configuration\nif (!msg.config.SMTP_SERVER || !msg.config.SMTP_PORT || !msg.config.SMTP_USER || !msg.config.SMTP_PASS) {\n    node.error('SMTP configuration is incomplete.', msg);\n    return null;\n}\n\nconst transporter = nodemailer.createTransport({\n    host: msg.config.SMTP_SERVER,\n    port: parseInt(msg.config.SMTP_PORT, 10),\n    secure: msg.config.SMTP_PORT == 465, // true for 465, false for other ports\n    auth: {\n        user: msg.config.SMTP_USER,\n        pass: msg.config.SMTP_PASS\n    }\n});\n\nconst mailOptions = {\n    from: \"Error Notifier\" <${msg.config.SMTP_USER}>,\n    to: msg.config.ALERT_EMAIL,\n    subject: msg.subject || '🚨 AI Validation Failed',\n    text: msg.body || msg.error\n};\n\ntransporter.sendMail(mailOptions, (error, info) => {\n    if (error) {\n        node.error('Failed to send error email: ' + error.message, msg);\n    } else {\n        node.log('Error email sent: ' + info.response);\n    }\n});\n\nreturn null;\n",
         "outputs": 0,
         "noerr": 0,
         "x": 1750,
@@ -849,7 +738,7 @@ jobs:
     - name: Set up Node.js
       uses: actions/setup-node@v2
       with:
-        node-version: '14'
+        node-version: '16'
 
     - name: Install Dependencies
       run: |
@@ -1153,36 +1042,327 @@ EOF
     log "Implemented security enhancements."
 }
 
-# Function to create README.md with detailed setup instructions
-create_readme_full() {
-    cat > "$README_FILE" <<'EOF'
-# Node-RED Automation
+# =============================================================================
+# New Function Definitions
+# =============================================================================
 
-## Description
-Automated Node-RED workflow for AI-driven code analysis, validation, and deployment to GitHub with notifications via Slack and email alerts. Additionally, the setup includes Dockerization for consistent environments, CI/CD pipelines using GitHub Actions, monitoring with Prometheus and Grafana, unit and integration testing, reusable subflows, security enhancements, automated backups, and comprehensive documentation.
+# Function to install Node-RED Dashboard
+install_node_red_dashboard() {
+    log "Installing Node-RED Dashboard nodes..."
+    cd "$PROJECT_DIR"
+    npm install node-red-dashboard || error_exit "Failed to install node-red-dashboard."
+    log "Node-RED Dashboard nodes installed successfully."
+}
 
-## Features
-- **Dynamic Code Range Selection:** Automatically extracts and processes specific ranges of code.
-- **Multiple Chatbot Interactions:** Alternates between multiple AI chatbots for adversarial testing and validation.
-- **Recursive Validation:** Iteratively refines code through multiple AI validation cycles.
-- **GitHub Integration:** Commits validated and corrected code to a specified GitHub repository.
-- **Notifications:**
-  - **Slack:** Sends success notifications upon successful GitHub commits.
-  - **Email:** Sends error alerts for any failures during the workflow.
-- **Secure Configuration Management:** Utilizes environment variables to manage sensitive information securely.
-- **Dockerization:** Ensures consistent environments across deployments.
-- **CI/CD Pipeline:** Automates testing and deployment using GitHub Actions.
-- **Monitoring and Logging:** Integrates Prometheus and Grafana for performance metrics and logs visualization.
-- **Testing Frameworks:** Implements unit and integration tests using Jest and Mocha.
-- **Reusable Subflows:** Encapsulates common functionalities for maintainability.
-- **Automated Backups:** Regularly backs up configurations and source code.
-- **Security Enhancements:** Implements rate limiting, data encryption, and access controls.
+# Function to create config.json with default values
+create_config_json() {
+    create_dir "$CONFIG_DIR"
 
-## Setup Instructions
+    if [ ! -f "$CONFIG_JSON" ]; then
+        cat > "$CONFIG_JSON" <<'EOF'
+{
+    "PROMPTS": [
+        "Check this code for errors, make sure it is bug free, add any functionality you think is important.",
+        "Identify all logic flaws.",
+        "Optimize performance bottlenecks.",
+        "Enhance security best practices.",
+        "Refactor redundant code.",
+        "Check compliance with coding standards."
+    ],
+    "INITIAL_CODE_FILE": "src/main.py",
+    "FINALIZED_CODE_FILE": "src/main_final.py",
+    "PROCESSING_RANGE_START": 2000,
+    "RANGE_INCREMENT": 2000,
+    "MAX_ITERATIONS_PER_CHATBOT": 5
+}
+EOF
+        log "Created config.json with default values."
+    else
+        log "config.json already exists. Skipping creation."
+    fi
+}
 
-### 1. Run the Setup Script
-Ensure you have the necessary permissions and that required commands (Node.js, npm, docker, docker-compose) are installed. If Docker is not installed, the script will handle its installation.
+# Function to create configuration flows for the web interface
+create_configuration_flows() {
+    cat > "$FLOW_DIR/configuration_flows.json" <<'EOF'
+[
+    {
+        "id": "config-ui",
+        "type": "tab",
+        "label": "Configuration UI",
+        "disabled": false,
+        "info": ""
+    },
+    {
+        "id": "ui_form",
+        "type": "ui_form",
+        "z": "config-ui",
+        "name": "Configuration Form",
+        "label": "Configure Bug Checking",
+        "group": "dashboard_group",
+        "order": 1,
+        "width": 0,
+        "height": 0,
+        "options": [
+            {
+                "label": "Prompts (JSON Array)",
+                "value": "PROMPTS",
+                "type": "textarea",
+                "required": true,
+                "rows": 6,
+                "cols": 50,
+                "placeholder": "Enter prompts as a JSON array"
+            },
+            {
+                "label": "GitHub Filename",
+                "value": "INITIAL_CODE_FILE",
+                "type": "text",
+                "required": true,
+                "placeholder": "e.g., src/main.py"
+            },
+            {
+                "label": "Finalized Filename",
+                "value": "FINALIZED_CODE_FILE",
+                "type": "text",
+                "required": true,
+                "placeholder": "e.g., src/main_final.py"
+            },
+            {
+                "label": "Processing Range Start (Line)",
+                "value": "PROCESSING_RANGE_START",
+                "type": "number",
+                "required": true,
+                "placeholder": "e.g., 2000"
+            },
+            {
+                "label": "Range Increment (Lines)",
+                "value": "RANGE_INCREMENT",
+                "type": "number",
+                "required": true,
+                "placeholder": "e.g., 2000"
+            },
+            {
+                "label": "Max Iterations per Chatbot",
+                "value": "MAX_ITERATIONS_PER_CHATBOT",
+                "type": "number",
+                "required": true,
+                "placeholder": "e.g., 5"
+            }
+        ],
+        "formValue": {},
+        "payload": "payload",
+        "topic": "config_update",
+        "x": 200,
+        "y": 100,
+        "wires": [
+            [
+                "save_config"
+            ]
+        ]
+    },
+    {
+        "id": "save_config",
+        "type": "file",
+        "z": "config-ui",
+        "name": "Save Config",
+        "filename": "/data/config/config.json",
+        "appendNewline": false,
+        "createDir": false,
+        "overwriteFile": "true",
+        "encoding": "utf8",
+        "x": 500,
+        "y": 100,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "load_config",
+        "type": "inject",
+        "z": "flow",
+        "name": "Load Config",
+        "props": [],
+        "repeat": "",
+        "crontab": "",
+        "once": true,
+        "topic": "",
+        "payloadType": "date",
+        "x": 200,
+        "y": 200,
+        "wires": [
+            [
+                "read_config"
+            ]
+        ]
+    },
+    {
+        "id": "read_config",
+        "type": "file in",
+        "z": "flow",
+        "name": "Read Config",
+        "filename": "/data/config/config.json",
+        "format": "utf8",
+        "sendError": false,
+        "x": 400,
+        "y": 200,
+        "wires": [
+            [
+                "update_flow_context"
+            ]
+        ]
+    },
+    {
+        "id": "update_flow_context",
+        "type": "change",
+        "z": "flow",
+        "name": "Update Flow Context",
+        "rules": [
+            {
+                "t": "set",
+                "p": "flow.config",
+                "to": "payload",
+                "toType": "jsonata"
+            }
+        ],
+        "action": "",
+        "property": "",
+        "from": "",
+        "to": "",
+        "reg": false,
+        "x": 600,
+        "y": 200,
+        "wires": [
+            []
+        ]
+    },
+    {
+        "id": "ui_dashboard",
+        "type": "ui_group",
+        "z": "",
+        "name": "Dashboard",
+        "tab": "dashboard_tab",
+        "order": 1,
+        "disp": true,
+        "width": "6",
+        "collapse": false
+    },
+    {
+        "id": "dashboard_tab",
+        "type": "ui_tab",
+        "z": "",
+        "name": "Configuration",
+        "icon": "dashboard",
+        "order": 1
+    }
+]
+EOF
+    log "Created configuration_flows.json for the web interface."
+}
 
-```bash
-sudo chmod +x setup-node-red-automation.sh
-sudo ./setup-node-red-automation.sh
+# Function to create dashboard configuration
+create_dashboard_group() {
+    # This function ensures that the dashboard tab and group exist.
+    # If they already exist, it skips creation.
+
+    # Check if dashboard_tab exists
+    if grep -q '"id": "dashboard_tab"' "$FLOW_DIR/configuration_flows.json"; then
+        log "Dashboard tab already exists. Skipping creation."
+    else
+        # Append dashboard_tab and dashboard_group
+        cat >> "$FLOW_DIR/configuration_flows.json" <<'EOF',
+{
+    "id": "dashboard_group",
+    "type": "ui_group",
+    "z": "",
+    "name": "Dashboard Group",
+    "tab": "dashboard_tab",
+    "order": 1,
+    "disp": true,
+    "width": "6",
+    "collapse": false
+},
+{
+    "id": "dashboard_tab",
+    "type": "ui_tab",
+    "z": "",
+    "name": "Configuration",
+    "icon": "dashboard",
+    "order": 1
+}
+EOF
+        log "Created dashboard group and tab."
+    fi
+}
+
+# Function to initialize config.json with default values
+initialize_config_json() {
+    create_config_json
+}
+
+# Function to import configuration flows into Node-RED
+import_configuration_flows() {
+    # Assuming Node-RED is running, use its API to import flows
+    # Alternatively, the user can manually import the flows via the UI
+
+    # This part is left as a placeholder since automating flow import requires Node-RED to be running
+    # and is beyond the scope of this script.
+    log "Please manually import 'configuration_flows.json' into Node-RED via the web interface."
+}
+
+# =============================================================================
+# Execution Flow (Corrected Order)
+# =============================================================================
+
+# Initial checks
+check_node_npm
+check_node_version
+create_dir "$PROJECT_DIR"
+create_dir "$TMP_DIR"  # Temporary directory for cleanup
+trap "rm -rf ${TMP_DIR}" EXIT  # Cleanup on exit
+cd "$PROJECT_DIR"
+
+# Configuration setup
+create_custom_package_json  # Must come before npm init
+init_npm
+create_env_file
+create_settings_js          # Generates settings.js with dotenv
+create_config_json          # Creates config.json with default values
+
+# Infrastructure setup
+install_docker              # Now includes sudo and OS check
+install_docker_compose
+create_dockerfile
+create_docker_compose
+
+# Install Node-RED Dashboard
+install_node_red_dashboard
+
+# Security setup
+setup_automated_backups     # Uses absolute paths and includes error handling
+implement_security
+
+# Additional Setup
+create_gitignore
+create_sample_source
+create_flow_json
+create_prometheus_config
+create_ci_cd_yaml
+create_docker_commands
+create_monitoring_setup
+create_test_scripts
+create_subflows
+
+# Dashboard and Configuration Flows
+create_configuration_flows
+create_dashboard_group
+
+# Finalization
+create_readme
+print_completion
+
+# Import configuration flows (manual step)
+import_configuration_flows
+
+# =============================================================================
+# End of Script
+# =============================================================================
