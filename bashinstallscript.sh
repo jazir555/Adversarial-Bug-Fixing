@@ -197,121 +197,121 @@ create_flow_json() {
             {
                 "t": "set",
                 "p": "github_repo",
-                "to": "$.env.GITHUB_REPO",
+                "to": "env.GITHUB_REPO",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "github_token",
-                "to": "$.env.GITHUB_TOKEN",
+                "to": "env.GITHUB_TOKEN",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "initial_code_file",
-                "to": "$.env.INITIAL_CODE_FILE",
+                "to": "env.INITIAL_CODE_FILE",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "finalized_code_file",
-                "to": "$.env.FINALIZED_CODE_FILE",
+                "to": "env.FINALIZED_CODE_FILE",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "processing_range_start",
-                "to": "$.env.PROCESSING_RANGE_START",
+                "to": "env.PROCESSING_RANGE_START",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "processing_range_end",
-                "to": "$.env.PROCESSING_RANGE_END",
+                "to": "env.PROCESSING_RANGE_END",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "range_increment",
-                "to": "$.env.RANGE_INCREMENT",
+                "to": "env.RANGE_INCREMENT",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "max_iterations_per_chatbot",
-                "to": "$.env.MAX_ITERATIONS_PER_CHATBOT",
+                "to": "env.MAX_ITERATIONS_PER_CHATBOT",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "openai_api_key",
-                "to": "$.env.OPENAI_API_KEY",
+                "to": "env.OPENAI_API_KEY",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "slack_channel",
-                "to": "$.env.SLACK_CHANNEL",
+                "to": "env.SLACK_CHANNEL",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "slack_token",
-                "to": "$.env.SLACK_TOKEN",
+                "to": "env.SLACK_TOKEN",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "alert_email",
-                "to": "$.env.ALERT_EMAIL",
+                "to": "env.ALERT_EMAIL",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "smtp_server",
-                "to": "$.env.SMTP_SERVER",
+                "to": "env.SMTP_SERVER",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "smtp_port",
-                "to": "$.env.SMTP_PORT",
+                "to": "env.SMTP_PORT",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "smtp_user",
-                "to": "$.env.SMTP_USER",
+                "to": "env.SMTP_USER",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "smtp_pass",
-                "to": "$.env.SMTP_PASS",
+                "to": "env.SMTP_PASS",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "chatbot_a_api_url",
-                "to": "$.env.CHATBOT_A_API_URL",
+                "to": "env.CHATBOT_A_API_URL",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "chatbot_a_api_key",
-                "to": "$.env.CHATBOT_A_API_KEY",
+                "to": "env.CHATBOT_A_API_KEY",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "chatbot_b_api_url",
-                "to": "$.env.CHATBOT_B_API_URL",
+                "to": "env.CHATBOT_B_API_URL",
                 "toType": "env"
             },
             {
                 "t": "set",
                 "p": "chatbot_b_api_key",
-                "to": "$.env.CHATBOT_B_API_KEY",
+                "to": "env.CHATBOT_B_API_KEY",
                 "toType": "env"
             }
         ],
@@ -333,7 +333,7 @@ create_flow_json() {
         "type": "function",
         "z": "flow",
         "name": "Code Extractor",
-        "func": "const fs = require('fs');\n\nconst start = parseInt(msg.processing_range_start, 10);\nconst end = parseInt(msg.processing_range_end, 10);\nconst increment = parseInt(msg.range_increment, 10);\nconst codeFile = msg.initial_code_file;\n\ntry {\n    const code = fs.readFileSync(codeFile, 'utf8');\n    const lines = code.split('\\n');\n    \n    // Initialize ranges array\n    msg.ranges = [];\n    let currentStart = start;\n    let currentEnd = end;\n\n    while (currentStart < lines.length) {\n        let adjustedStart = currentStart;\n        let adjustedEnd = currentEnd;\n        \n        // Adjust start to include full function\n        while (adjustedStart > 0 && !/\\b(def |class |async def )/.test(lines[adjustedStart - 1])) {\n            adjustedStart--;\n        }\n        \n        // Adjust end to include full function\n        while (adjustedEnd < lines.length && !/\\b(return|raise |except |finally:)/.test(lines[adjustedEnd])) {\n            adjustedEnd++;\n        }\n        \n        // Push the adjusted range\n        msg.ranges.push({ start: adjustedStart, end: adjustedEnd });\n\n        # Increment for next range\n        currentStart += increment;\n        currentEnd += increment;\n    }\n\n    # Initialize range processing index\n    msg.current_range_index = 0;\n\n    return msg;\n} catch (err) {\n    msg.error = 'Code extraction failed: ' + err.message;\n    return [null, msg];\n}",
+        "func": "const fs = require('fs');\n\nconst start = parseInt(msg.processing_range_start, 10);\nconst end = parseInt(msg.processing_range_end, 10);\nconst increment = parseInt(msg.range_increment, 10);\nconst codeFile = msg.initial_code_file;\n\ntry {\n    const code = fs.readFileSync(codeFile, 'utf8');\n    const lines = code.split('\\n');\n    \n    // Initialize ranges array\n    msg.ranges = [];\n    let currentStart = start;\n    let currentEnd = end;\n\n    while (currentStart < lines.length) {\n        let adjustedStart = currentStart;\n        let adjustedEnd = currentEnd;\n\n        // Adjust start to include full function\n        while (adjustedStart > 0 && !/\\b(def |class |async def )/.test(lines[adjustedStart - 1])) {\n            adjustedStart--;\n        }\n\n        // Adjust end to include full function\n        while (adjustedEnd < lines.length && !/\\b(return|raise |except |finally:)/.test(lines[adjustedEnd])) {\n            adjustedEnd++;\n        }\n\n        // Push the adjusted range\n        msg.ranges.push({ start: adjustedStart, end: adjustedEnd });\n\n        // Increment for next range\n        currentStart += increment;\n        currentEnd += increment;\n    }\n\n    // Initialize range processing index\n    msg.current_range_index = 0;\n\n    return msg;\n} catch (err) {\n    msg.error = 'Code extraction failed: ' + err.message;\n    return [null, msg];\n}",
         "outputs": 2,
         "noerr": 0,
         "x": 550,
@@ -353,31 +353,30 @@ create_flow_json() {
         "z": "flow",
         "name": "Range Iterator",
         "func": `
-    if (msg.current_range_index < msg.ranges.length) {
-        const currentRange = msg.ranges[msg.current_range_index];
-        msg.current_range = currentRange;
-        
-        // Extract code chunk based on current range
-        const fs = require('fs');
-        const code = fs.readFileSync(msg.initial_code_file, 'utf8');
-        const lines = code.split('\\n');
-        const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');
-        
-        msg.code_chunk = codeChunk;
-        msg.iteration = 0;
-        msg.max_iterations = parseInt(msg.max_iterations_per_chatbot, 10) * msg.chatbots.length;
-        msg.chatbots = [
-            { name: "Chatbot A", api_url: msg.chatbot_a_api_url, api_key: msg.chatbot_a_api_key },
-            { name: "Chatbot B", api_url: msg.chatbot_b_api_url, api_key: msg.chatbot_b_api_key }
-        ];
-        msg.current_chatbot_index = 0;
-        
-        return msg;
-    } else {
-        // All ranges processed
-        return [msg, null];
-    }
-    `,
+if (msg.current_range_index < msg.ranges.length) {
+    const currentRange = msg.ranges[msg.current_range_index];
+    msg.current_range = currentRange;
+    
+    // Extract code chunk based on current range
+    const fs = require('fs');
+    const code = fs.readFileSync(msg.initial_code_file, 'utf8');
+    const lines = code.split('\\n');
+    const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');
+    
+    msg.code_chunk = codeChunk;
+    msg.iteration = 0;
+    msg.chatbots = [
+        { name: "Chatbot A", api_url: msg.chatbot_a_api_url, api_key: msg.chatbot_a_api_key },
+        { name: "Chatbot B", api_url: msg.chatbot_b_api_url, api_key: msg.chatbot_b_api_key }
+    ];
+    msg.current_chatbot_index = 0;
+    
+    return msg;
+} else {
+    // All ranges processed
+    return [msg, null];
+}
+`,
         "outputs": 2,
         "noerr": 0,
         "x": 750,
@@ -397,19 +396,19 @@ create_flow_json() {
         "z": "flow",
         "name": "Prompt Engine",
         "func": `
-    const prompts = [
-        'Check this code for errors, make sure it is bug free, add any functionality you think is important.',
-        'Identify all logic flaws.',
-        'Optimize performance bottlenecks.',
-        'Enhance security best practices.',
-        'Refactor redundant code.',
-        'Check compliance with coding standards.'
-    ];
-    
-    const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
-    msg.prompt = \`\${randomPrompt}\\n\\n\${msg.language || 'Python'} code:\\n\${msg.code_chunk}\\n\\nContext:\\n\${msg.context || ''}\`;
-    return msg;
-    `,
+const prompts = [
+    'Check this code for errors, make sure it is bug free, add any functionality you think is important.',
+    'Identify all logic flaws.',
+    'Optimize performance bottlenecks.',
+    'Enhance security best practices.',
+    'Refactor redundant code.',
+    'Check compliance with coding standards.'
+];
+
+const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+msg.prompt = \`\${randomPrompt}\\n\\n\${msg.language || 'Python'} code:\\n\${msg.code_chunk}\\n\\nContext:\\n\${msg.context || ''}\`;
+return msg;
+`,
         "outputs": 1,
         "noerr": 0,
         "x": 950,
@@ -426,20 +425,23 @@ create_flow_json() {
         "z": "flow",
         "name": "AI Gateway Configurator",
         "func": `
-    const chatbot = msg.chatbots[msg.current_chatbot_index % msg.chatbots.length];
-    
-    msg.url = chatbot.api_url;
-    msg.headers.Authorization = \`Bearer \${chatbot.api_key}\`;
-    msg.body = JSON.stringify({
-        model: "gpt-4",
-        messages: [
-            { role: "system", content: "You are a senior code reviewer." },
-            { role: "user", content: msg.prompt }
-        ]
-    });
-    
-    return msg;
-    `,
+const chatbot = msg.chatbots[msg.current_chatbot_index % msg.chatbots.length];
+
+msg.url = chatbot.api_url;
+msg.headers = {
+    "Content-Type": "application/json",
+    "Authorization": \`Bearer \${chatbot.api_key}\`
+};
+msg.payload = JSON.stringify({
+    model: "gpt-4",
+    messages: [
+        { role: "system", content: "You are a senior code reviewer." },
+        { role: "user", content: msg.prompt }
+    ]
+});
+
+return msg;
+`,
         "outputs": 1,
         "noerr": 0,
         "x": 1150,
@@ -482,29 +484,29 @@ create_flow_json() {
         "z": "flow",
         "name": "AI Response Processor",
         "func": `
-    const response = msg.payload;
-    let correctedCode = '';
-    
-    if (response && response.choices && response.choices.length > 0) {
-        correctedCode = response.choices[0].message.content.trim();
-    } else {
-        msg.error = 'Invalid response from AI chatbot.';
-        return [null, msg];
-    }
-    
-    msg.corrected_code = correctedCode;
-    
-    // Increment iteration count
-    msg.iteration += 1;
-    
-    // Update code chunk with corrected code
-    msg.code_chunk = correctedCode;
-    
-    # Alternate to next chatbot
-    msg.current_chatbot_index += 1;
-    
-    return msg;
-    `,
+const response = msg.payload;
+let correctedCode = '';
+
+if (response && response.choices && response.choices.length > 0) {
+    correctedCode = response.choices[0].message.content.trim();
+} else {
+    msg.error = 'Invalid response from AI chatbot.';
+    return [null, msg];
+}
+
+msg.corrected_code = correctedCode;
+
+// Increment iteration count
+msg.iteration += 1;
+
+// Update code chunk with corrected code
+msg.code_chunk = correctedCode;
+
+// Alternate to next chatbot
+msg.current_chatbot_index += 1;
+
+return msg;
+`,
         "outputs": 2,
         "noerr": 0,
         "x": 1550,
@@ -524,12 +526,12 @@ create_flow_json() {
         "z": "flow",
         "name": "Check Iterations",
         "func": `
-    if (msg.iteration < msg.max_iterations) {
-        return msg;
-    } else {
-        return [null, msg];
-    }
-    `,
+if (msg.iteration < msg.max_iterations_per_chatbot) {
+    return msg;
+} else {
+    return [null, msg];
+}
+`,
         "outputs": 2,
         "noerr": 0,
         "x": 1750,
@@ -549,20 +551,20 @@ create_flow_json() {
         "z": "flow",
         "name": "Finalize Corrected Code",
         "func": `
-    const fs = require('fs');
-    
-    const finalizedCode = msg.corrected_code;
-    const finalizedFile = msg.finalized_code_file;
-    
-    try {
-        fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');
-        msg.commit_message = "Automated Code Update: Finalized corrections for range " + msg.current_range.start + "-" + msg.current_range.end;
-        return msg;
-    } catch (err) {
-        msg.error = 'Finalization failed: ' + err.message;
-        return [null, msg];
-    }
-    `,
+const fs = require('fs');
+
+const finalizedCode = msg.corrected_code;
+const finalizedFile = msg.finalized_code_file;
+
+try {
+    fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');
+    msg.commit_message = "Automated Code Update: Finalized corrections for range " + msg.current_range.start + "-" + msg.current_range.end;
+    return msg;
+} catch (err) {
+    msg.error = 'Finalization failed: ' + err.message;
+    return [null, msg];
+}
+`,
         "outputs": 2,
         "noerr": 0,
         "x": 1950,
@@ -617,9 +619,9 @@ create_flow_json() {
         "z": "flow",
         "name": "Range Iterator Increment",
         "func": `
-    msg.current_range_index += 1;
-    return msg;
-    `,
+msg.current_range_index += 1;
+return msg;
+`,
         "outputs": 1,
         "noerr": 0,
         "x": 1750,
@@ -636,10 +638,10 @@ create_flow_json() {
         "z": "flow",
         "name": "Finalization",
         "func": `
-    # Placeholder for any finalization steps if needed
-    # For example, resetting variables or logging
-    return msg;
-    `,
+// Placeholder for any finalization steps if needed
+// For example, resetting variables or logging
+return msg;
+`,
         "outputs": 1,
         "noerr": 0,
         "x": 1550,
@@ -656,41 +658,41 @@ create_flow_json() {
         "z": "flow",
         "name": "Error Handler",
         "func": `
-    const nodemailer = require('nodemailer');
-    
-    // Validate SMTP configuration
-    if (!msg.smtp_server || !msg.smtp_port || !msg.smtp_user || !msg.smtp_pass) {
-        node.error('SMTP configuration is incomplete.', msg);
-        return null;
-    }
-    
-    const transporter = nodemailer.createTransport({
-        host: msg.smtp_server,
-        port: parseInt(msg.smtp_port, 10),
-        secure: msg.smtp_port == 465, // true for 465, false for other ports
-        auth: {
-            user: msg.smtp_user,
-            pass: msg.smtp_pass
-        }
-    });
-    
-    const mailOptions = {
-        from: \`"Error Notifier" <\${msg.smtp_user}>\`,
-        to: msg.alert_email,
-        subject: msg.subject || '🚨 AI Validation Failed',
-        text: msg.body || msg.error
-    };
-    
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-            node.error('Failed to send error email: ' + error.message, msg);
-        } else {
-            node.log('Error email sent: ' + info.response);
-        }
-    });
-    
+const nodemailer = require('nodemailer');
+
+// Validate SMTP configuration
+if (!msg.smtp_server || !msg.smtp_port || !msg.smtp_user || !msg.smtp_pass) {
+    node.error('SMTP configuration is incomplete.', msg);
     return null;
-    `,
+}
+
+const transporter = nodemailer.createTransport({
+    host: msg.smtp_server,
+    port: parseInt(msg.smtp_port, 10),
+    secure: msg.smtp_port == 465, // true for 465, false for other ports
+    auth: {
+        user: msg.smtp_user,
+        pass: msg.smtp_pass
+    }
+});
+
+const mailOptions = {
+    from: \`"Error Notifier" <\${msg.smtp_user}>\`,
+    to: msg.alert_email,
+    subject: msg.subject || '🚨 AI Validation Failed',
+    text: msg.body || msg.error
+};
+
+transporter.sendMail(mailOptions, (error, info) => {
+    if (error) {
+        node.error('Failed to send error email: ' + error.message, msg);
+    } else {
+        node.log('Error email sent: ' + info.response);
+    }
+});
+
+return null;
+`,
         "outputs": 0,
         "noerr": 0,
         "x": 1750,
@@ -856,355 +858,6 @@ EOF
     log "Created GitHub Actions CI/CD workflow."
 }
 
-# Function to create Docker Compose commands
-create_docker_commands() {
-    cat > "start-docker.sh" <<'EOF'
-#!/bin/bash
-docker-compose up -d
-EOF
-
-    cat > "stop-docker.sh" <<'EOF'
-#!/bin/bash
-docker-compose down
-EOF
-
-    chmod +x start-docker.sh stop-docker.sh
-    log "Created Docker Compose start and stop scripts."
-}
-
-# Function to create Prometheus and Grafana setup scripts
-create_monitoring_scripts() {
-    cat > "monitoring/setup-monitoring.sh" <<'EOF'
-#!/bin/bash
-
-# Start Prometheus and Grafana using Docker Compose
-docker-compose up -d prometheus grafana
-
-echo "Prometheus is available at http://localhost:9090"
-echo "Grafana is available at http://localhost:3000 (default login: admin/admin)"
-EOF
-
-    chmod +x monitoring/setup-monitoring.sh
-    log "Created monitoring setup script."
-}
-
-# Function to create test scripts using Jest and Mocha
-create_test_scripts() {
-    create_dir "$TEST_DIR"
-
-    # Sample Jest test
-    cat > "$TEST_DIR/sample.test.js" <<'EOF'
-const sum = (a, b) => a + b;
-
-test('adds 1 + 2 to equal 3', () => {
-    expect(sum(1, 2)).toBe(3);
-});
-EOF
-
-    # Sample Mocha test
-    cat > "$TEST_DIR/sample.spec.js" <<'EOF'
-const assert = require('assert');
-
-describe('Array', function() {
-    describe('#indexOf()', function() {
-        it('should return -1 when the value is not present', function() {
-            assert.strictEqual([1,2,3].indexOf(4), -1);
-        });
-    });
-});
-EOF
-
-    log "Created sample test scripts for Jest and Mocha."
-}
-
-# Function to create subflows for reusability
-create_subflows() {
-    create_dir "$SUBFLOWS_DIR"
-
-    # Sample Subflow: API Request Handler
-    cat > "$SUBFLOWS_DIR/api-request-handler.json" <<'EOF'
-{
-    "id": "api-request-handler",
-    "type": "subflow",
-    "name": "API Request Handler",
-    "info": "Handles API requests with rate limiting and error handling.",
-    "category": "function",
-    "in": [
-        {
-            "x": 40,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "out": [
-        {
-            "x": 480,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "env": [
-        {
-            "name": "API_RATE_LIMIT",
-            "type": "num",
-            "value": "5",
-            "required": true
-        }
-    ],
-    "color": "#a6bbcf"
-}
-EOF
-
-    log "Created sample subflow for API Request Handling."
-}
-
-# Function to set up automated backups using cron
-setup_automated_backups() {
-    create_dir "$BACKUP_DIR"
-
-    cat > "backup.sh" <<'EOF'
-#!/bin/bash
-
-# Directory to backup
-SOURCE_DIR="/path/to/node-red-automation"
-BACKUP_DIR="/path/to/node-red-automation/backups"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILE="$BACKUP_DIR/backup_$TIMESTAMP.tar.gz"
-
-# Create backup
-tar -czf "$BACKUP_FILE" "$SOURCE_DIR"
-
-# Optional: Remove backups older than 7 days
-find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
-EOF
-
-    chmod +x backup.sh
-
-    # Add cron job
-    (crontab -l 2>/dev/null; echo "0 2 * * * /path/to/node-red-automation/backup.sh") | crontab -
-    log "Set up automated backups with cron."
-}
-
-# Function to implement security enhancements
-implement_security() {
-    # Note: Actual implementation may require more detailed configuration
-    # Here we provide placeholders and instructions
-
-    # 1. API Rate Limiting
-    cat > "$FLOW_DIR/rate-limiter.json" <<'EOF'
-{
-    "id": "rate-limiter",
-    "type": "subflow",
-    "name": "Rate Limiter",
-    "info": "Limits the rate of API requests to prevent abuse.",
-    "category": "function",
-    "in": [
-        {
-            "x": 40,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "out": [
-        {
-            "x": 480,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "env": [
-        {
-            "name": "RATE_LIMIT",
-            "type": "num",
-            "value": "5",
-            "required": true
-        },
-        {
-            "name": "TIME_WINDOW",
-            "type": "num",
-            "value": "60",
-            "required": true
-        }
-    ],
-    "color": "#a6bbcf"
-}
-EOF
-
-    # 2. Data Encryption
-    # Ensure all external communications use HTTPS/TLS.
-    # This is typically handled by the APIs being called.
-    # For Node-RED editor access, consider setting up HTTPS.
-
-    # 3. Access Controls
-    # Configure Node-RED to require authentication
-    cat >> "$FLOW_DIR/settings.js" <<'EOF'
-adminAuth: {
-    type: "credentials",
-    users: [{
-        username: "admin",
-        password: "$2a$08$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // bcrypt hash
-        permissions: "*"
-    }]
-},
-EOF
-
-    log "Implemented security enhancements with rate limiting and access controls."
-}
-
-# Function to create Dockerfile
-create_dockerfile() {
-    cat > "$DOCKERFILE" <<'EOF'
-# Use the official Node-RED image as the base
-FROM nodered/node-red:latest
-
-# Set working directory
-WORKDIR /data
-
-# Copy package.json and install dependencies
-COPY package.json .
-RUN npm install
-
-# Copy flow configurations and source code
-COPY flows/ flows/
-COPY config/ config/
-COPY src/ src/
-COPY subflows/ subflows/
-COPY tests/ tests/
-
-# Expose Node-RED port
-EXPOSE 1880
-
-# Start Node-RED
-CMD ["npm", "start"]
-EOF
-    log "Created Dockerfile for Dockerization."
-}
-
-# Function to create Docker Compose file
-create_docker_compose() {
-    cat > "$DOCKER_COMPOSE_FILE" <<'EOF'
-version: '3.8'
-
-services:
-  node-red:
-    build: .
-    ports:
-      - "${NODE_RED_PORT}:1880"
-    volumes:
-      - ./flows:/data/flows
-      - ./config:/data/config
-      - ./src:/data/src
-      - ./subflows:/data/subflows
-      - ./tests:/data/tests
-      - node-red-data:/data
-    environment:
-      - NODE_RED_PORT=${NODE_RED_PORT}
-    restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-    restart: unless-stopped
-
-volumes:
-  node-red-data:
-  grafana-data:
-EOF
-    log "Created docker-compose.yml for container orchestration."
-}
-
-# Function to create Prometheus configuration
-create_prometheus_config() {
-    create_dir "monitoring"
-
-    cat > "monitoring/prometheus.yml" <<'EOF'
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'node-red'
-    static_configs:
-      - targets: ['node-red:1880']
-EOF
-    log "Created Prometheus configuration."
-}
-
-# Function to create GitHub Actions CI/CD workflow
-create_ci_cd_yaml() {
-    create_dir ".github/workflows"
-
-    cat > "$CI_CD_YML" <<'EOF'
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '14'
-
-    - name: Install Dependencies
-      run: |
-        cd node-red-automation
-        npm install
-
-    - name: Run Tests
-      run: |
-        cd node-red-automation
-        npm test
-
-    - name: Build Docker Image
-      run: |
-        cd node-red-automation
-        docker build -t node-red-automation:latest .
-
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Push Docker Image
-      run: |
-        docker tag node-red-automation:latest your-dockerhub-username/node-red-automation:latest
-        docker push your-dockerhub-username/node-red-automation:latest
-
-    - name: Deploy to Server
-      uses: easingthemes/ssh-deploy@v2.0.7
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-        remote-user: your-remote-user
-        server-ip: your-server-ip
-        remote-path: /path/to/deploy
-        command: |
-          docker pull your-dockerhub-username/node-red-automation:latest
-          docker stop node-red-automation || true
-          docker rm node-red-automation || true
-          docker run -d -p 1880:1880 --name node-red-automation your-dockerhub-username/node-red-automation:latest
-EOF
-    log "Created GitHub Actions CI/CD workflow."
-}
-
 # Function to create Docker Compose start and stop scripts
 create_docker_commands() {
     cat > "start-docker.sh" <<'EOF'
@@ -1222,7 +875,7 @@ EOF
 }
 
 # Function to create Prometheus and Grafana setup scripts
-create_monitoring_scripts() {
+create_monitoring_setup() {
     cat > "monitoring/setup-monitoring.sh" <<'EOF'
 #!/bin/bash
 
@@ -1311,7 +964,7 @@ EOF
 setup_automated_backups() {
     create_dir "$BACKUP_DIR"
 
-    cat > "backup.sh" <<'EOF'
+    cat > "$BACKUP_DIR/backup.sh" <<'EOF'
 #!/bin/bash
 
 # Directory to backup
@@ -1329,18 +982,16 @@ find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
 echo "Backup created at $BACKUP_FILE and old backups removed."
 EOF
 
-    chmod +x backup.sh
+    chmod +x "$BACKUP_DIR/backup.sh"
 
     # Add cron job (runs daily at 2 AM)
-    (crontab -l 2>/dev/null; echo "0 2 * * * /path/to/node-red-automation/backup.sh") | crontab -
+    CRON_JOB="0 2 * * * $(pwd)/$BACKUP_DIR/backup.sh"
+    (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
     log "Set up automated backups with cron."
 }
 
 # Function to implement security enhancements
 implement_security() {
-    # Note: Actual implementation may require more detailed configuration
-    # Here we provide placeholders and instructions
-
     # 1. API Rate Limiting
     cat > "$FLOW_DIR/rate-limiter.json" <<'EOF'
 {
@@ -1382,1467 +1033,10 @@ implement_security() {
 EOF
 
     # 2. Data Encryption
-    # Ensure all external communications use HTTPS/TLS.
-    # This is typically handled by the APIs being called.
+    # Note: Ensure all external communications use HTTPS/TLS.
     # For Node-RED editor access, consider setting up HTTPS.
 
     # 3. Access Controls
-    # Configure Node-RED to require authentication
-    # Note: This requires editing the settings.js file.
-    # Here we provide a placeholder. Users should replace the bcrypt hash with their own.
-
-    SETTINGS_FILE="$FLOW_DIR/settings.js"
-
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        cp "$FLOW_DIR/settings.js.sample" "$SETTINGS_FILE" || error_exit "Failed to copy settings.js.sample to settings.js."
-        log "Copied settings.js.sample to settings.js."
-    fi
-
-    # Append adminAuth configuration
-    cat >> "$SETTINGS_FILE" <<'EOF'
-
-adminAuth: {
-    type: "credentials",
-    users: [{
-        username: "admin",
-        password: "$2a$08$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // bcrypt hash of your password
-        permissions: "*"
-    }]
-},
-EOF
-
-    log "Configured Node-RED access controls in settings.js."
-}
-
-# Function to create Dockerfile
-create_dockerfile() {
-    cat > "$DOCKERFILE" <<'EOF'
-# Use the official Node-RED image as the base
-FROM nodered/node-red:latest
-
-# Set working directory
-WORKDIR /data
-
-# Copy package.json and install dependencies
-COPY package.json .
-RUN npm install
-
-# Copy flow configurations and source code
-COPY flows/ flows/
-COPY config/ config/
-COPY src/ src/
-COPY subflows/ subflows/
-COPY tests/ tests/
-
-# Expose Node-RED port
-EXPOSE 1880
-
-# Start Node-RED
-CMD ["npm", "start"]
-EOF
-    log "Created Dockerfile for Dockerization."
-}
-
-# Function to create Docker Compose file
-create_docker_compose() {
-    cat > "$DOCKER_COMPOSE_FILE" <<'EOF'
-version: '3.8'
-
-services:
-  node-red:
-    build: .
-    ports:
-      - "${NODE_RED_PORT}:1880"
-    volumes:
-      - ./flows:/data/flows
-      - ./config:/data/config
-      - ./src:/data/src
-      - ./subflows:/data/subflows
-      - ./tests:/data/tests
-      - node-red-data:/data
-    environment:
-      - NODE_RED_PORT=${NODE_RED_PORT}
-    restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-    restart: unless-stopped
-
-volumes:
-  node-red-data:
-  grafana-data:
-EOF
-    log "Created docker-compose.yml for container orchestration."
-}
-
-# Function to create Prometheus configuration
-create_prometheus_config() {
-    create_dir "monitoring"
-
-    cat > "monitoring/prometheus.yml" <<'EOF'
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'node-red'
-    static_configs:
-      - targets: ['node-red:1880']
-EOF
-    log "Created Prometheus configuration."
-}
-
-# Function to create GitHub Actions CI/CD workflow
-create_ci_cd_yaml() {
-    create_dir ".github/workflows"
-
-    cat > "$CI_CD_YML" <<'EOF'
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '14'
-
-    - name: Install Dependencies
-      run: |
-        cd node-red-automation
-        npm install
-
-    - name: Run Tests
-      run: |
-        cd node-red-automation
-        npm test
-
-    - name: Build Docker Image
-      run: |
-        cd node-red-automation
-        docker build -t node-red-automation:latest .
-
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Push Docker Image
-      run: |
-        docker tag node-red-automation:latest your-dockerhub-username/node-red-automation:latest
-        docker push your-dockerhub-username/node-red-automation:latest
-
-    - name: Deploy to Server
-      uses: easingthemes/ssh-deploy@v2.0.7
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-        remote-user: your-remote-user
-        server-ip: your-server-ip
-        remote-path: /path/to/deploy
-        command: |
-          docker pull your-dockerhub-username/node-red-automation:latest
-          docker stop node-red-automation || true
-          docker rm node-red-automation || true
-          docker run -d -p 1880:1880 --name node-red-automation your-dockerhub-username/node-red-automation:latest
-EOF
-    log "Created GitHub Actions CI/CD workflow."
-}
-
-# Function to create Docker Compose start and stop scripts
-create_docker_commands() {
-    cat > "start-docker.sh" <<'EOF'
-#!/bin/bash
-docker-compose up -d
-EOF
-
-    cat > "stop-docker.sh" <<'EOF'
-#!/bin/bash
-docker-compose down
-EOF
-
-    chmod +x start-docker.sh stop-docker.sh
-    log "Created Docker Compose start and stop scripts."
-}
-
-# Function to create Prometheus and Grafana setup scripts
-create_monitoring_scripts() {
-    cat > "monitoring/setup-monitoring.sh" <<'EOF'
-#!/bin/bash
-
-# Start Prometheus and Grafana using Docker Compose
-docker-compose up -d prometheus grafana
-
-echo "Prometheus is available at http://localhost:9090"
-echo "Grafana is available at http://localhost:3000 (default login: admin/admin)"
-EOF
-
-    chmod +x monitoring/setup-monitoring.sh
-    log "Created monitoring setup script."
-}
-
-# Function to create test scripts using Jest and Mocha
-create_test_scripts() {
-    create_dir "$TEST_DIR"
-
-    # Sample Jest test
-    cat > "$TEST_DIR/sample.test.js" <<'EOF'
-const sum = (a, b) => a + b;
-
-test('adds 1 + 2 to equal 3', () => {
-    expect(sum(1, 2)).toBe(3);
-});
-EOF
-
-    # Sample Mocha test
-    cat > "$TEST_DIR/sample.spec.js" <<'EOF'
-const assert = require('assert');
-
-describe('Array', function() {
-    describe('#indexOf()', function() {
-        it('should return -1 when the value is not present', function() {
-            assert.strictEqual([1,2,3].indexOf(4), -1);
-        });
-    });
-});
-EOF
-
-    log "Created sample test scripts for Jest and Mocha."
-}
-
-# Function to create subflows for reusability
-create_subflows() {
-    create_dir "$SUBFLOWS_DIR"
-
-    # Sample Subflow: API Request Handler
-    cat > "$SUBFLOWS_DIR/api-request-handler.json" <<'EOF'
-{
-    "id": "api-request-handler",
-    "type": "subflow",
-    "name": "API Request Handler",
-    "info": "Handles API requests with rate limiting and error handling.",
-    "category": "function",
-    "in": [
-        {
-            "x": 40,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "out": [
-        {
-            "x": 480,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "env": [
-        {
-            "name": "API_RATE_LIMIT",
-            "type": "num",
-            "value": "5",
-            "required": true
-        }
-    ],
-    "color": "#a6bbcf"
-}
-EOF
-
-    log "Created sample subflow for API Request Handling."
-}
-
-# Function to set up automated backups using cron
-setup_automated_backups() {
-    create_dir "$BACKUP_DIR"
-
-    cat > "backup.sh" <<'EOF'
-#!/bin/bash
-
-# Directory to backup
-SOURCE_DIR="$(pwd)"
-BACKUP_DIR="$(pwd)/backups"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILE="$BACKUP_DIR/backup_$TIMESTAMP.tar.gz"
-
-# Create backup
-tar -czf "$BACKUP_FILE" "$SOURCE_DIR"
-
-# Optional: Remove backups older than 7 days
-find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
-
-echo "Backup created at $BACKUP_FILE and old backups removed."
-EOF
-
-    chmod +x backup.sh
-
-    # Add cron job (runs daily at 2 AM)
-    (crontab -l 2>/dev/null; echo "0 2 * * * /path/to/node-red-automation/backup.sh") | crontab -
-    log "Set up automated backups with cron."
-}
-
-# Function to implement security enhancements
-implement_security() {
-    # Note: Actual implementation may require more detailed configuration
-    # Here we provide placeholders and instructions
-
-    # 1. API Rate Limiting
-    cat > "$FLOW_DIR/rate-limiter.json" <<'EOF'
-{
-    "id": "rate-limiter",
-    "type": "subflow",
-    "name": "Rate Limiter",
-    "info": "Limits the rate of API requests to prevent abuse.",
-    "category": "function",
-    "in": [
-        {
-            "x": 40,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "out": [
-        {
-            "x": 480,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "env": [
-        {
-            "name": "RATE_LIMIT",
-            "type": "num",
-            "value": "5",
-            "required": true
-        },
-        {
-            "name": "TIME_WINDOW",
-            "type": "num",
-            "value": "60",
-            "required": true
-        }
-    ],
-    "color": "#a6bbcf"
-}
-EOF
-
-    # 2. Data Encryption
-    # Ensure all external communications use HTTPS/TLS.
-    # This is typically handled by the APIs being called.
-    # For Node-RED editor access, consider setting up HTTPS.
-
-    # 3. Access Controls
-    # Configure Node-RED to require authentication
-    # Note: This requires editing the settings.js file.
-    # Here we provide a placeholder. Users should replace the bcrypt hash with their own.
-
-    SETTINGS_FILE="$FLOW_DIR/settings.js"
-
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        cp "$FLOW_DIR/settings.js.sample" "$SETTINGS_FILE" || error_exit "Failed to copy settings.js.sample to settings.js."
-        log "Copied settings.js.sample to settings.js."
-    fi
-
-    # Append adminAuth configuration
-    cat >> "$SETTINGS_FILE" <<'EOF'
-
-adminAuth: {
-    type: "credentials",
-    users: [{
-        username: "admin",
-        password: "$2a$08$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // bcrypt hash of your password
-        permissions: "*"
-    }]
-},
-EOF
-
-    log "Configured Node-RED access controls in settings.js."
-}
-
-# Function to create Dockerfile
-create_dockerfile() {
-    cat > "$DOCKERFILE" <<'EOF'
-# Use the official Node-RED image as the base
-FROM nodered/node-red:latest
-
-# Set working directory
-WORKDIR /data
-
-# Copy package.json and install dependencies
-COPY package.json .
-RUN npm install
-
-# Copy flow configurations and source code
-COPY flows/ flows/
-COPY config/ config/
-COPY src/ src/
-COPY subflows/ subflows/
-COPY tests/ tests/
-
-# Expose Node-RED port
-EXPOSE 1880
-
-# Start Node-RED
-CMD ["npm", "start"]
-EOF
-    log "Created Dockerfile for Dockerization."
-}
-
-# Function to create Docker Compose file
-create_docker_compose() {
-    cat > "$DOCKER_COMPOSE_FILE" <<'EOF'
-version: '3.8'
-
-services:
-  node-red:
-    build: .
-    ports:
-      - "${NODE_RED_PORT}:1880"
-    volumes:
-      - ./flows:/data/flows
-      - ./config:/data/config
-      - ./src:/data/src
-      - ./subflows:/data/subflows
-      - ./tests:/data/tests
-      - node-red-data:/data
-    environment:
-      - NODE_RED_PORT=${NODE_RED_PORT}
-    restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-    restart: unless-stopped
-
-volumes:
-  node-red-data:
-  grafana-data:
-EOF
-    log "Created docker-compose.yml for container orchestration."
-}
-
-# Function to create Prometheus configuration
-create_prometheus_config() {
-    create_dir "monitoring"
-
-    cat > "monitoring/prometheus.yml" <<'EOF'
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'node-red'
-    static_configs:
-      - targets: ['node-red:1880']
-EOF
-    log "Created Prometheus configuration."
-}
-
-# Function to create GitHub Actions CI/CD workflow
-create_ci_cd_yaml() {
-    create_dir ".github/workflows"
-
-    cat > "$CI_CD_YML" <<'EOF'
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '14'
-
-    - name: Install Dependencies
-      run: |
-        cd node-red-automation
-        npm install
-
-    - name: Run Tests
-      run: |
-        cd node-red-automation
-        npm test
-
-    - name: Build Docker Image
-      run: |
-        cd node-red-automation
-        docker build -t node-red-automation:latest .
-
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Push Docker Image
-      run: |
-        docker tag node-red-automation:latest your-dockerhub-username/node-red-automation:latest
-        docker push your-dockerhub-username/node-red-automation:latest
-
-    - name: Deploy to Server
-      uses: easingthemes/ssh-deploy@v2.0.7
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-        remote-user: your-remote-user
-        server-ip: your-server-ip
-        remote-path: /path/to/deploy
-        command: |
-          docker pull your-dockerhub-username/node-red-automation:latest
-          docker stop node-red-automation || true
-          docker rm node-red-automation || true
-          docker run -d -p 1880:1880 --name node-red-automation your-dockerhub-username/node-red-automation:latest
-EOF
-    log "Created GitHub Actions CI/CD workflow."
-}
-
-# Function to create Docker Compose start and stop scripts
-create_docker_commands() {
-    cat > "start-docker.sh" <<'EOF'
-#!/bin/bash
-docker-compose up -d
-EOF
-
-    cat > "stop-docker.sh" <<'EOF'
-#!/bin/bash
-docker-compose down
-EOF
-
-    chmod +x start-docker.sh stop-docker.sh
-    log "Created Docker Compose start and stop scripts."
-}
-
-# Function to create Prometheus and Grafana setup scripts
-create_monitoring_scripts() {
-    cat > "monitoring/setup-monitoring.sh" <<'EOF'
-#!/bin/bash
-
-# Start Prometheus and Grafana using Docker Compose
-docker-compose up -d prometheus grafana
-
-echo "Prometheus is available at http://localhost:9090"
-echo "Grafana is available at http://localhost:3000 (default login: admin/admin)"
-EOF
-
-    chmod +x monitoring/setup-monitoring.sh
-    log "Created monitoring setup script."
-}
-
-# Function to create test scripts using Jest and Mocha
-create_test_scripts() {
-    create_dir "$TEST_DIR"
-
-    # Sample Jest test
-    cat > "$TEST_DIR/sample.test.js" <<'EOF'
-const sum = (a, b) => a + b;
-
-test('adds 1 + 2 to equal 3', () => {
-    expect(sum(1, 2)).toBe(3);
-});
-EOF
-
-    # Sample Mocha test
-    cat > "$TEST_DIR/sample.spec.js" <<'EOF'
-const assert = require('assert');
-
-describe('Array', function() {
-    describe('#indexOf()', function() {
-        it('should return -1 when the value is not present', function() {
-            assert.strictEqual([1,2,3].indexOf(4), -1);
-        });
-    });
-});
-EOF
-
-    log "Created sample test scripts for Jest and Mocha."
-}
-
-# Function to create subflows for reusability
-create_subflows() {
-    create_dir "$SUBFLOWS_DIR"
-
-    # Sample Subflow: API Request Handler
-    cat > "$SUBFLOWS_DIR/api-request-handler.json" <<'EOF'
-{
-    "id": "api-request-handler",
-    "type": "subflow",
-    "name": "API Request Handler",
-    "info": "Handles API requests with rate limiting and error handling.",
-    "category": "function",
-    "in": [
-        {
-            "x": 40,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "out": [
-        {
-            "x": 480,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "env": [
-        {
-            "name": "API_RATE_LIMIT",
-            "type": "num",
-            "value": "5",
-            "required": true
-        }
-    ],
-    "color": "#a6bbcf"
-}
-EOF
-
-    log "Created sample subflow for API Request Handling."
-}
-
-# Function to set up automated backups using cron
-setup_automated_backups() {
-    create_dir "$BACKUP_DIR"
-
-    cat > "backup.sh" <<'EOF'
-#!/bin/bash
-
-# Directory to backup
-SOURCE_DIR="$(pwd)"
-BACKUP_DIR="$(pwd)/backups"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILE="$BACKUP_DIR/backup_$TIMESTAMP.tar.gz"
-
-# Create backup
-tar -czf "$BACKUP_FILE" "$SOURCE_DIR"
-
-# Optional: Remove backups older than 7 days
-find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
-
-echo "Backup created at $BACKUP_FILE and old backups removed."
-EOF
-
-    chmod +x backup.sh
-
-    # Add cron job (runs daily at 2 AM)
-    (crontab -l 2>/dev/null; echo "0 2 * * * /path/to/node-red-automation/backup.sh") | crontab -
-    log "Set up automated backups with cron."
-}
-
-# Function to implement security enhancements
-implement_security() {
-    # Note: Actual implementation may require more detailed configuration
-    # Here we provide placeholders and instructions
-
-    # 1. API Rate Limiting
-    cat > "$FLOW_DIR/rate-limiter.json" <<'EOF'
-{
-    "id": "rate-limiter",
-    "type": "subflow",
-    "name": "Rate Limiter",
-    "info": "Limits the rate of API requests to prevent abuse.",
-    "category": "function",
-    "in": [
-        {
-            "x": 40,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "out": [
-        {
-            "x": 480,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "env": [
-        {
-            "name": "RATE_LIMIT",
-            "type": "num",
-            "value": "5",
-            "required": true
-        },
-        {
-            "name": "TIME_WINDOW",
-            "type": "num",
-            "value": "60",
-            "required": true
-        }
-    ],
-    "color": "#a6bbcf"
-}
-EOF
-
-    # 2. Data Encryption
-    # Ensure all external communications use HTTPS/TLS.
-    # This is typically handled by the APIs being called.
-    # For Node-RED editor access, consider setting up HTTPS.
-
-    # 3. Access Controls
-    # Configure Node-RED to require authentication
-    # Note: This requires editing the settings.js file.
-    # Here we provide a placeholder. Users should replace the bcrypt hash with their own.
-
-    SETTINGS_FILE="$FLOW_DIR/settings.js"
-
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        cp "$FLOW_DIR/settings.js.sample" "$SETTINGS_FILE" || error_exit "Failed to copy settings.js.sample to settings.js."
-        log "Copied settings.js.sample to settings.js."
-    fi
-
-    # Append adminAuth configuration
-    cat >> "$SETTINGS_FILE" <<'EOF'
-
-adminAuth: {
-    type: "credentials",
-    users: [{
-        username: "admin",
-        password: "$2a$08$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // bcrypt hash of your password
-        permissions: "*"
-    }]
-},
-EOF
-
-    log "Configured Node-RED access controls in settings.js."
-}
-
-# Function to create Dockerfile
-create_dockerfile() {
-    cat > "$DOCKERFILE" <<'EOF'
-# Use the official Node-RED image as the base
-FROM nodered/node-red:latest
-
-# Set working directory
-WORKDIR /data
-
-# Copy package.json and install dependencies
-COPY package.json .
-RUN npm install
-
-# Copy flow configurations and source code
-COPY flows/ flows/
-COPY config/ config/
-COPY src/ src/
-COPY subflows/ subflows/
-COPY tests/ tests/
-
-# Expose Node-RED port
-EXPOSE 1880
-
-# Start Node-RED
-CMD ["npm", "start"]
-EOF
-    log "Created Dockerfile for Dockerization."
-}
-
-# Function to create Docker Compose file
-create_docker_compose() {
-    cat > "$DOCKER_COMPOSE_FILE" <<'EOF'
-version: '3.8'
-
-services:
-  node-red:
-    build: .
-    ports:
-      - "${NODE_RED_PORT}:1880"
-    volumes:
-      - ./flows:/data/flows
-      - ./config:/data/config
-      - ./src:/data/src
-      - ./subflows:/data/subflows
-      - ./tests:/data/tests
-      - node-red-data:/data
-    environment:
-      - NODE_RED_PORT=${NODE_RED_PORT}
-    restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-    restart: unless-stopped
-
-volumes:
-  node-red-data:
-  grafana-data:
-EOF
-    log "Created docker-compose.yml for container orchestration."
-}
-
-# Function to create Prometheus configuration
-create_prometheus_config() {
-    create_dir "monitoring"
-
-    cat > "monitoring/prometheus.yml" <<'EOF'
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'node-red'
-    static_configs:
-      - targets: ['node-red:1880']
-EOF
-    log "Created Prometheus configuration."
-}
-
-# Function to create GitHub Actions CI/CD workflow
-create_ci_cd_yaml() {
-    create_dir ".github/workflows"
-
-    cat > "$CI_CD_YML" <<'EOF'
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '14'
-
-    - name: Install Dependencies
-      run: |
-        cd node-red-automation
-        npm install
-
-    - name: Run Tests
-      run: |
-        cd node-red-automation
-        npm test
-
-    - name: Build Docker Image
-      run: |
-        cd node-red-automation
-        docker build -t node-red-automation:latest .
-
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Push Docker Image
-      run: |
-        docker tag node-red-automation:latest your-dockerhub-username/node-red-automation:latest
-        docker push your-dockerhub-username/node-red-automation:latest
-
-    - name: Deploy to Server
-      uses: easingthemes/ssh-deploy@v2.0.7
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-        remote-user: your-remote-user
-        server-ip: your-server-ip
-        remote-path: /path/to/deploy
-        command: |
-          docker pull your-dockerhub-username/node-red-automation:latest
-          docker stop node-red-automation || true
-          docker rm node-red-automation || true
-          docker run -d -p 1880:1880 --name node-red-automation your-dockerhub-username/node-red-automation:latest
-EOF
-    log "Created GitHub Actions CI/CD workflow."
-}
-
-# Function to create Docker Compose start and stop scripts
-create_docker_commands() {
-    cat > "start-docker.sh" <<'EOF'
-#!/bin/bash
-docker-compose up -d
-EOF
-
-    cat > "stop-docker.sh" <<'EOF'
-#!/bin/bash
-docker-compose down
-EOF
-
-    chmod +x start-docker.sh stop-docker.sh
-    log "Created Docker Compose start and stop scripts."
-}
-
-# Function to create Prometheus and Grafana setup scripts
-create_monitoring_scripts() {
-    cat > "monitoring/setup-monitoring.sh" <<'EOF'
-#!/bin/bash
-
-# Start Prometheus and Grafana using Docker Compose
-docker-compose up -d prometheus grafana
-
-echo "Prometheus is available at http://localhost:9090"
-echo "Grafana is available at http://localhost:3000 (default login: admin/admin)"
-EOF
-
-    chmod +x monitoring/setup-monitoring.sh
-    log "Created monitoring setup script."
-}
-
-# Function to create test scripts using Jest and Mocha
-create_test_scripts() {
-    create_dir "$TEST_DIR"
-
-    # Sample Jest test
-    cat > "$TEST_DIR/sample.test.js" <<'EOF'
-const sum = (a, b) => a + b;
-
-test('adds 1 + 2 to equal 3', () => {
-    expect(sum(1, 2)).toBe(3);
-});
-EOF
-
-    # Sample Mocha test
-    cat > "$TEST_DIR/sample.spec.js" <<'EOF'
-const assert = require('assert');
-
-describe('Array', function() {
-    describe('#indexOf()', function() {
-        it('should return -1 when the value is not present', function() {
-            assert.strictEqual([1,2,3].indexOf(4), -1);
-        });
-    });
-});
-EOF
-
-    log "Created sample test scripts for Jest and Mocha."
-}
-
-# Function to create subflows for reusability
-create_subflows() {
-    create_dir "$SUBFLOWS_DIR"
-
-    # Sample Subflow: API Request Handler
-    cat > "$SUBFLOWS_DIR/api-request-handler.json" <<'EOF'
-{
-    "id": "api-request-handler",
-    "type": "subflow",
-    "name": "API Request Handler",
-    "info": "Handles API requests with rate limiting and error handling.",
-    "category": "function",
-    "in": [
-        {
-            "x": 40,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "out": [
-        {
-            "x": 480,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "env": [
-        {
-            "name": "API_RATE_LIMIT",
-            "type": "num",
-            "value": "5",
-            "required": true
-        }
-    ],
-    "color": "#a6bbcf"
-}
-EOF
-
-    log "Created sample subflow for API Request Handling."
-}
-
-# Function to set up automated backups using cron
-setup_automated_backups() {
-    create_dir "$BACKUP_DIR"
-
-    cat > "backup.sh" <<'EOF'
-#!/bin/bash
-
-# Directory to backup
-SOURCE_DIR="$(pwd)"
-BACKUP_DIR="$(pwd)/backups"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILE="$BACKUP_DIR/backup_$TIMESTAMP.tar.gz"
-
-# Create backup
-tar -czf "$BACKUP_FILE" "$SOURCE_DIR"
-
-# Optional: Remove backups older than 7 days
-find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
-
-echo "Backup created at $BACKUP_FILE and old backups removed."
-EOF
-
-    chmod +x backup.sh
-
-    # Add cron job (runs daily at 2 AM)
-    (crontab -l 2>/dev/null; echo "0 2 * * * /path/to/node-red-automation/backup.sh") | crontab -
-    log "Set up automated backups with cron."
-}
-
-# Function to implement security enhancements
-implement_security() {
-    # Note: Actual implementation may require more detailed configuration
-    # Here we provide placeholders and instructions
-
-    # 1. API Rate Limiting
-    cat > "$FLOW_DIR/rate-limiter.json" <<'EOF'
-{
-    "id": "rate-limiter",
-    "type": "subflow",
-    "name": "Rate Limiter",
-    "info": "Limits the rate of API requests to prevent abuse.",
-    "category": "function",
-    "in": [
-        {
-            "x": 40,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "out": [
-        {
-            "x": 480,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "env": [
-        {
-            "name": "RATE_LIMIT",
-            "type": "num",
-            "value": "5",
-            "required": true
-        },
-        {
-            "name": "TIME_WINDOW",
-            "type": "num",
-            "value": "60",
-            "required": true
-        }
-    ],
-    "color": "#a6bbcf"
-}
-EOF
-
-    # 2. Data Encryption
-    # Ensure all external communications use HTTPS/TLS.
-    # This is typically handled by the APIs being called.
-    # For Node-RED editor access, consider setting up HTTPS.
-
-    # 3. Access Controls
-    # Configure Node-RED to require authentication
-    # Note: This requires editing the settings.js file.
-    # Here we provide a placeholder. Users should replace the bcrypt hash with their own.
-
-    SETTINGS_FILE="$FLOW_DIR/settings.js"
-
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        cp "$FLOW_DIR/settings.js.sample" "$SETTINGS_FILE" || error_exit "Failed to copy settings.js.sample to settings.js."
-        log "Copied settings.js.sample to settings.js."
-    fi
-
-    # Append adminAuth configuration
-    cat >> "$SETTINGS_FILE" <<'EOF'
-
-adminAuth: {
-    type: "credentials",
-    users: [{
-        username: "admin",
-        password: "$2a$08$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // bcrypt hash of your password
-        permissions: "*"
-    }]
-},
-EOF
-
-    log "Configured Node-RED access controls in settings.js."
-}
-
-# Function to create Dockerfile
-create_dockerfile() {
-    cat > "$DOCKERFILE" <<'EOF'
-# Use the official Node-RED image as the base
-FROM nodered/node-red:latest
-
-# Set working directory
-WORKDIR /data
-
-# Copy package.json and install dependencies
-COPY package.json .
-RUN npm install
-
-# Copy flow configurations and source code
-COPY flows/ flows/
-COPY config/ config/
-COPY src/ src/
-COPY subflows/ subflows/
-COPY tests/ tests/
-
-# Expose Node-RED port
-EXPOSE 1880
-
-# Start Node-RED
-CMD ["npm", "start"]
-EOF
-    log "Created Dockerfile for Dockerization."
-}
-
-# Function to create Docker Compose file
-create_docker_compose() {
-    cat > "$DOCKER_COMPOSE_FILE" <<'EOF'
-version: '3.8'
-
-services:
-  node-red:
-    build: .
-    ports:
-      - "${NODE_RED_PORT}:1880"
-    volumes:
-      - ./flows:/data/flows
-      - ./config:/data/config
-      - ./src:/data/src
-      - ./subflows:/data/subflows
-      - ./tests:/data/tests
-      - node-red-data:/data
-    environment:
-      - NODE_RED_PORT=${NODE_RED_PORT}
-    restart: unless-stopped
-
-  prometheus:
-    image: prom/prometheus:latest
-    volumes:
-      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
-    ports:
-      - "9090:9090"
-    restart: unless-stopped
-
-  grafana:
-    image: grafana/grafana:latest
-    ports:
-      - "3000:3000"
-    volumes:
-      - grafana-data:/var/lib/grafana
-    restart: unless-stopped
-
-volumes:
-  node-red-data:
-  grafana-data:
-EOF
-    log "Created docker-compose.yml for container orchestration."
-}
-
-# Function to create Prometheus configuration
-create_prometheus_config() {
-    create_dir "monitoring"
-
-    cat > "monitoring/prometheus.yml" <<'EOF'
-global:
-  scrape_interval: 15s
-
-scrape_configs:
-  - job_name: 'node-red'
-    static_configs:
-      - targets: ['node-red:1880']
-EOF
-    log "Created Prometheus configuration."
-}
-
-# Function to create GitHub Actions CI/CD workflow
-create_ci_cd_yaml() {
-    create_dir ".github/workflows"
-
-    cat > "$CI_CD_YML" <<'EOF'
-name: CI/CD Pipeline
-
-on:
-  push:
-    branches: [ main ]
-
-jobs:
-  build-and-deploy:
-    runs-on: ubuntu-latest
-
-    steps:
-    - uses: actions/checkout@v2
-
-    - name: Set up Node.js
-      uses: actions/setup-node@v2
-      with:
-        node-version: '14'
-
-    - name: Install Dependencies
-      run: |
-        cd node-red-automation
-        npm install
-
-    - name: Run Tests
-      run: |
-        cd node-red-automation
-        npm test
-
-    - name: Build Docker Image
-      run: |
-        cd node-red-automation
-        docker build -t node-red-automation:latest .
-
-    - name: Log in to Docker Hub
-      uses: docker/login-action@v1
-      with:
-        username: ${{ secrets.DOCKER_USERNAME }}
-        password: ${{ secrets.DOCKER_PASSWORD }}
-
-    - name: Push Docker Image
-      run: |
-        docker tag node-red-automation:latest your-dockerhub-username/node-red-automation:latest
-        docker push your-dockerhub-username/node-red-automation:latest
-
-    - name: Deploy to Server
-      uses: easingthemes/ssh-deploy@v2.0.7
-      with:
-        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
-        remote-user: your-remote-user
-        server-ip: your-server-ip
-        remote-path: /path/to/deploy
-        command: |
-          docker pull your-dockerhub-username/node-red-automation:latest
-          docker stop node-red-automation || true
-          docker rm node-red-automation || true
-          docker run -d -p 1880:1880 --name node-red-automation your-dockerhub-username/node-red-automation:latest
-EOF
-    log "Created GitHub Actions CI/CD workflow."
-}
-
-# Function to create Docker Compose start and stop scripts
-create_docker_commands() {
-    cat > "start-docker.sh" <<'EOF'
-#!/bin/bash
-docker-compose up -d
-EOF
-
-    cat > "stop-docker.sh" <<'EOF'
-#!/bin/bash
-docker-compose down
-EOF
-
-    chmod +x start-docker.sh stop-docker.sh
-    log "Created Docker Compose start and stop scripts."
-}
-
-# Function to create Prometheus and Grafana setup scripts
-create_monitoring_scripts() {
-    cat > "monitoring/setup-monitoring.sh" <<'EOF'
-#!/bin/bash
-
-# Start Prometheus and Grafana using Docker Compose
-docker-compose up -d prometheus grafana
-
-echo "Prometheus is available at http://localhost:9090"
-echo "Grafana is available at http://localhost:3000 (default login: admin/admin)"
-EOF
-
-    chmod +x monitoring/setup-monitoring.sh
-    log "Created monitoring setup script."
-}
-
-# Function to create test scripts using Jest and Mocha
-create_test_scripts() {
-    create_dir "$TEST_DIR"
-
-    # Sample Jest test
-    cat > "$TEST_DIR/sample.test.js" <<'EOF'
-const sum = (a, b) => a + b;
-
-test('adds 1 + 2 to equal 3', () => {
-    expect(sum(1, 2)).toBe(3);
-});
-EOF
-
-    # Sample Mocha test
-    cat > "$TEST_DIR/sample.spec.js" <<'EOF'
-const assert = require('assert');
-
-describe('Array', function() {
-    describe('#indexOf()', function() {
-        it('should return -1 when the value is not present', function() {
-            assert.strictEqual([1,2,3].indexOf(4), -1);
-        });
-    });
-});
-EOF
-
-    log "Created sample test scripts for Jest and Mocha."
-}
-
-# Function to create subflows for reusability
-create_subflows() {
-    create_dir "$SUBFLOWS_DIR"
-
-    # Sample Subflow: API Request Handler
-    cat > "$SUBFLOWS_DIR/api-request-handler.json" <<'EOF'
-{
-    "id": "api-request-handler",
-    "type": "subflow",
-    "name": "API Request Handler",
-    "info": "Handles API requests with rate limiting and error handling.",
-    "category": "function",
-    "in": [
-        {
-            "x": 40,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "out": [
-        {
-            "x": 480,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "env": [
-        {
-            "name": "API_RATE_LIMIT",
-            "type": "num",
-            "value": "5",
-            "required": true
-        }
-    ],
-    "color": "#a6bbcf"
-}
-EOF
-
-    log "Created sample subflow for API Request Handling."
-}
-
-# Function to set up automated backups using cron
-setup_automated_backups() {
-    create_dir "$BACKUP_DIR"
-
-    cat > "backup.sh" <<'EOF'
-#!/bin/bash
-
-# Directory to backup
-SOURCE_DIR="$(pwd)"
-BACKUP_DIR="$(pwd)/backups"
-TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
-BACKUP_FILE="$BACKUP_DIR/backup_$TIMESTAMP.tar.gz"
-
-# Create backup
-tar -czf "$BACKUP_FILE" "$SOURCE_DIR"
-
-# Optional: Remove backups older than 7 days
-find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
-
-echo "Backup created at $BACKUP_FILE and old backups removed."
-EOF
-
-    chmod +x backup.sh
-
-    # Add cron job (runs daily at 2 AM)
-    (crontab -l 2>/dev/null; echo "0 2 * * * /path/to/node-red-automation/backup.sh") | crontab -
-    log "Set up automated backups with cron."
-}
-
-# Function to implement security enhancements
-implement_security() {
-    # Note: Actual implementation may require more detailed configuration
-    # Here we provide placeholders and instructions
-
-    # 1. API Rate Limiting
-    cat > "$FLOW_DIR/rate-limiter.json" <<'EOF'
-{
-    "id": "rate-limiter",
-    "type": "subflow",
-    "name": "Rate Limiter",
-    "info": "Limits the rate of API requests to prevent abuse.",
-    "category": "function",
-    "in": [
-        {
-            "x": 40,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "out": [
-        {
-            "x": 480,
-            "y": 40,
-            "wires": []
-        }
-    ],
-    "env": [
-        {
-            "name": "RATE_LIMIT",
-            "type": "num",
-            "value": "5",
-            "required": true
-        },
-        {
-            "name": "TIME_WINDOW",
-            "type": "num",
-            "value": "60",
-            "required": true
-        }
-    ],
-    "color": "#a6bbcf"
-}
-EOF
-
-    # 2. Data Encryption
-    # Ensure all external communications use HTTPS/TLS.
-    # This is typically handled by the APIs being called.
-    # For Node-RED editor access, consider setting up HTTPS.
-
-    # 3. Access Controls
-    # Configure Node-RED to require authentication
-    # Note: This requires editing the settings.js file.
-    # Here we provide a placeholder. Users should replace the bcrypt hash with their own.
-
     SETTINGS_FILE="$FLOW_DIR/settings.js"
 
     if [ ! -f "$SETTINGS_FILE" ]; then
