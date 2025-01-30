@@ -1,4 +1,3 @@
-```json
 [
     {
         "id": "schedule-trigger",
@@ -183,31 +182,31 @@
         "z": "flow",
         "name": "Range Iterator",
         "func": `
-    if (msg.current_range_index < msg.ranges.length) {
-        const currentRange = msg.ranges[msg.current_range_index];
-        msg.current_range = currentRange;
-        
-        // Extract code chunk based on current range
-        const fs = require('fs');
-        const code = fs.readFileSync(msg.initial_code_file, 'utf8');
-        const lines = code.split('\\n');
-        const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');
-        
-        msg.code_chunk = codeChunk;
-        msg.iteration = 0;
-        msg.max_iterations = parseInt(msg.max_iterations_per_chatbot, 10) * msg.chatbots.length;
-        msg.chatbots = [
-            { name: "Chatbot A", api_url: msg.chatbot_a_api_url, api_key: msg.chatbot_a_api_key },
-            { name: "Chatbot B", api_url: msg.chatbot_b_api_url, api_key: msg.chatbot_b_api_key }
-        ];
-        msg.current_chatbot_index = 0;
-        
-        return msg;
-    } else {
-        // All ranges processed
-        return [msg, null];
-    }
-    `,
+        if (msg.current_range_index < msg.ranges.length) {
+            const currentRange = msg.ranges[msg.current_range_index];
+            msg.current_range = currentRange;
+            
+            // Extract code chunk based on current range
+            const fs = require('fs');
+            const code = fs.readFileSync(msg.initial_code_file, 'utf8');
+            const lines = code.split('\\n');
+            const codeChunk = lines.slice(currentRange.start, currentRange.end + 1).join('\\n');
+            
+            msg.code_chunk = codeChunk;
+            msg.iteration = 0;
+            msg.max_iterations = parseInt(msg.max_iterations_per_chatbot, 10) * msg.chatbots.length;
+            msg.chatbots = [
+                { name: "Chatbot A", api_url: msg.chatbot_a_api_url, api_key: msg.chatbot_a_api_key },
+                { name: "Chatbot B", api_url: msg.chatbot_b_api_url, api_key: msg.chatbot_b_api_key }
+            ];
+            msg.current_chatbot_index = 0;
+            
+            return msg;
+        } else {
+            // All ranges processed
+            return [msg, null];
+        }
+        `,
         "outputs": 2,
         "noerr": 0,
         "x": 750,
@@ -227,19 +226,19 @@
         "z": "flow",
         "name": "Prompt Engine",
         "func": `
-    const prompts = [
-        'Check this code for errors, make sure it is bug free, add any functionality you think is important.',
-        'Identify all logic flaws.',
-        'Optimize performance bottlenecks.',
-        'Enhance security best practices.',
-        'Refactor redundant code.',
-        'Check compliance with coding standards.'
-    ];
-    
-    const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
-    msg.prompt = \`\${randomPrompt}\\n\\n\${msg.language || 'Python'} code:\\n\${msg.code_chunk}\\n\\nContext:\\n\${msg.context || ''}\`;
-    return msg;
-    `,
+        const prompts = [
+            'Check this code for errors, make sure it is bug free, add any functionality you think is important.',
+            'Identify all logic flaws.',
+            'Optimize performance bottlenecks.',
+            'Enhance security best practices.',
+            'Refactor redundant code.',
+            'Check compliance with coding standards.'
+        ];
+        
+        const randomPrompt = prompts[Math.floor(Math.random() * prompts.length)];
+        msg.prompt = \`\${randomPrompt}\\n\\n\${msg.language || 'Python'} code:\\n\${msg.code_chunk}\\n\\nContext:\\n\${msg.context || ''}\`;
+        return msg;
+        `,
         "outputs": 1,
         "noerr": 0,
         "x": 950,
@@ -256,20 +255,23 @@
         "z": "flow",
         "name": "AI Gateway Configurator",
         "func": `
-    const chatbot = msg.chatbots[msg.current_chatbot_index % msg.chatbots.length];
-    
-    msg.url = chatbot.api_url;
-    msg.headers.Authorization = \`Bearer \${chatbot.api_key}\`;
-    msg.body = JSON.stringify({
-        model: "gpt-4",
-        messages: [
-            { role: "system", content: "You are a senior code reviewer." },
-            { role: "user", content: msg.prompt }
-        ]
-    });
-    
-    return msg;
-    `,
+        const chatbot = msg.chatbots[msg.current_chatbot_index % msg.chatbots.length];
+        
+        msg.url = chatbot.api_url;
+        msg.headers = {
+            "Content-Type": "application/json",
+            "Authorization": \`Bearer \${chatbot.api_key}\`
+        };
+        msg.body = JSON.stringify({
+            model: "gpt-4",
+            messages: [
+                { role: "system", content: "You are a senior code reviewer." },
+                { role: "user", content: msg.prompt }
+            ]
+        });
+        
+        return msg;
+        `,
         "outputs": 1,
         "noerr": 0,
         "x": 1150,
@@ -299,10 +301,7 @@
                 "error-handler"
             ]
         ],
-        "headers": {
-            "Content-Type": "application/json",
-            "Authorization": ""
-        },
+        "headers": {},
         "property": "",
         "body": ""
     },
@@ -312,29 +311,29 @@
         "z": "flow",
         "name": "AI Response Processor",
         "func": `
-    const response = msg.payload;
-    let correctedCode = '';
-    
-    if (response && response.choices && response.choices.length > 0) {
-        correctedCode = response.choices[0].message.content.trim();
-    } else {
-        msg.error = 'Invalid response from AI chatbot.';
-        return [null, msg];
-    }
-    
-    msg.corrected_code = correctedCode;
-    
-    // Increment iteration count
-    msg.iteration += 1;
-    
-    // Update code chunk with corrected code
-    msg.code_chunk = correctedCode;
-    
-    // Alternate to next chatbot
-    msg.current_chatbot_index += 1;
-    
-    return msg;
-    `,
+        const response = msg.payload;
+        let correctedCode = '';
+        
+        if (response && response.choices && response.choices.length > 0) {
+            correctedCode = response.choices[0].message.content.trim();
+        } else {
+            msg.error = 'Invalid response from AI chatbot.';
+            return [null, msg];
+        }
+        
+        msg.corrected_code = correctedCode;
+        
+        // Increment iteration count
+        msg.iteration += 1;
+        
+        // Update code chunk with corrected code
+        msg.code_chunk = correctedCode;
+        
+        // Alternate to next chatbot
+        msg.current_chatbot_index += 1;
+        
+        return msg;
+        `,
         "outputs": 2,
         "noerr": 0,
         "x": 1550,
@@ -354,12 +353,12 @@
         "z": "flow",
         "name": "Check Iterations",
         "func": `
-    if (msg.iteration < msg.max_iterations) {
-        return msg;
-    } else {
-        return [null, msg];
-    }
-    `,
+        if (msg.iteration < msg.max_iterations) {
+            return msg;
+        } else {
+            return [null, msg];
+        }
+        `,
         "outputs": 2,
         "noerr": 0,
         "x": 1750,
@@ -379,20 +378,20 @@
         "z": "flow",
         "name": "Finalize Corrected Code",
         "func": `
-    const fs = require('fs');
-    
-    const finalizedCode = msg.corrected_code;
-    const finalizedFile = msg.finalized_code_file;
-    
-    try {
-        fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');
-        msg.commit_message = "Automated Code Update: Finalized corrections for range " + msg.current_range.start + "-" + msg.current_range.end;
-        return msg;
-    } catch (err) {
-        msg.error = 'Finalization failed: ' + err.message;
-        return [null, msg];
-    }
-    `,
+        const fs = require('fs');
+        
+        const finalizedCode = msg.corrected_code;
+        const finalizedFile = msg.finalized_code_file;
+        
+        try {
+            fs.writeFileSync(finalizedFile, finalizedCode, 'utf8');
+            msg.commit_message = "Automated Code Update: Finalized corrections for range " + msg.current_range.start + "-" + msg.current_range.end;
+            return msg;
+        } catch (err) {
+            msg.error = 'Finalization failed: ' + err.message;
+            return [null, msg];
+        }
+        `,
         "outputs": 2,
         "noerr": 0,
         "x": 1950,
@@ -447,9 +446,9 @@
         "z": "flow",
         "name": "Range Iterator Increment",
         "func": `
-    msg.current_range_index += 1;
-    return msg;
-    `,
+        msg.current_range_index += 1;
+        return msg;
+        `,
         "outputs": 1,
         "noerr": 0,
         "x": 1750,
@@ -466,10 +465,10 @@
         "z": "flow",
         "name": "Finalization",
         "func": `
-    // Placeholder for any finalization steps if needed
-    // For example, resetting variables or logging
-    return msg;
-    `,
+        // Placeholder for any finalization steps if needed
+        // For example, resetting variables or logging
+        return msg;
+        `,
         "outputs": 1,
         "noerr": 0,
         "x": 1550,
@@ -486,35 +485,41 @@
         "z": "flow",
         "name": "Error Handler",
         "func": `
-    const nodemailer = require('nodemailer');
-    
-    const transporter = nodemailer.createTransport({
-        host: msg.smtp_server,
-        port: parseInt(msg.smtp_port, 10),
-        secure: false, // true for 465, false for other ports
-        auth: {
-            user: msg.smtp_user,
-            pass: msg.smtp_pass
+        const nodemailer = require('nodemailer');
+        
+        // Validate SMTP configuration
+        if (!msg.smtp_server || !msg.smtp_port || !msg.smtp_user || !msg.smtp_pass) {
+            node.error('SMTP configuration is incomplete.', msg);
+            return null;
         }
-    });
-    
-    const mailOptions = {
-        from: msg.smtp_user,
-        to: msg.alert_email,
-        subject: msg.subject || '🚨 AI Validation Failed',
-        text: msg.body || msg.error
-    };
-    
-    transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-            node.error('Failed to send error email: ' + error.message, msg);
-        } else {
-            node.log('Error email sent: ' + info.response);
-        }
-    });
-    
-    return null;
-    `,
+        
+        const transporter = nodemailer.createTransport({
+            host: msg.smtp_server,
+            port: parseInt(msg.smtp_port, 10),
+            secure: msg.smtp_port == 465, // true for 465, false for other ports
+            auth: {
+                user: msg.smtp_user,
+                pass: msg.smtp_pass
+            }
+        });
+        
+        const mailOptions = {
+            from: \`"Error Notifier" <\${msg.smtp_user}>\`,
+            to: msg.alert_email,
+            subject: msg.subject || '🚨 AI Validation Failed',
+            text: msg.body || msg.error
+        };
+        
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                node.error('Failed to send error email: ' + error.message, msg);
+            } else {
+                node.log('Error email sent: ' + info.response);
+            }
+        });
+        
+        return null;
+        `,
         "outputs": 0,
         "noerr": 0,
         "x": 1750,
