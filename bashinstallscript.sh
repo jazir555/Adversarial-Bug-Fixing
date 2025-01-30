@@ -1134,30 +1134,3 @@ EOF
 create_readme() {
     cat > "$README_FILE" <<'EOF'
 # Node-RED Automation
-
-## Description
-Automated Node-RED workflow for AI-driven code analysis, validation, and deployment to GitHub with notifications via Slack and email alerts. Additionally, the setup includes Dockerization for consistent environments, CI/CD pipelines using GitHub Actions, monitoring with Prometheus and Grafana, unit and integration testing, reusable subflows, security enhancements, automated backups, and comprehensive documentation.
-
-## Features
-- **Dynamic Code Range Selection:** Automatically extracts and processes specific ranges of code.
-- **Multiple Chatbot Interactions:** Alternates between multiple AI chatbots for adversarial testing and validation.
-- **Recursive Validation:** Iteratively refines code through multiple AI validation cycles.
-- **GitHub Integration:** Commits validated and corrected code to a specified GitHub repository.
-- **Notifications:**
-  - **Slack:** Sends success notifications upon successful GitHub commits.
-  - **Email:** Sends error alerts for any failures during the workflow.
-- **Secure Configuration Management:** Utilizes environment variables to manage sensitive information securely.
-- **Dockerization:** Ensures consistent environments across deployments.
-- **CI/CD Pipeline:** Automates testing and deployment using GitHub Actions.
-- **Monitoring and Logging:** Integrates Prometheus and Grafana for performance metrics and logs visualization.
-- **Testing Frameworks:** Implements unit and integration tests using Jest and Mocha.
-- **Reusable Subflows:** Encapsulates common functionalities for maintainability.
-- **Automated Backups:** Regularly backs up configurations and source code.
-- **Security Enhancements:** Implements rate limiting, data encryption, and access controls.
-
-## Setup Instructions
-
-### 1. Clone the Repository
-```bash
-git clone https://github.com/your-org/node-red-automation.git
-cd node-red-automation
