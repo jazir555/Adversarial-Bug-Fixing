@@ -33,6 +33,7 @@ TEST_DIR="$PROJECT_DIR/tests"
 SUBFLOWS_DIR="$PROJECT_DIR/subflows"
 BACKUP_DIR="$PROJECT_DIR/backups"
 MONITORING_DIR="$PROJECT_DIR/monitoring"
+SETTINGS_FILE="$CONFIG_DIR/settings.js"
 
 # =============================================================================
 # Function Definitions
@@ -58,6 +59,15 @@ check_command() {
     fi
 }
 
+# Function to check if the script is run with sudo
+check_sudo() {
+    if [ "$EUID" -ne 0 ]; then
+        error_exit "Please run this script with sudo or as root."
+    else
+        log "Script is running with sudo privileges."
+    fi
+}
+
 # Function to create a directory if it doesn't exist
 create_dir() {
     if [ ! -d "$1" ]; then
@@ -74,28 +84,28 @@ install_docker() {
         log "Docker not found. Installing Docker..."
 
         # Update the apt package index
-        sudo apt-get update -y || error_exit "Failed to update package index."
+        apt-get update -y || error_exit "Failed to update package index."
 
         # Install packages to allow apt to use a repository over HTTPS
-        sudo apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release || error_exit "Failed to install prerequisites for Docker."
+        apt-get install -y apt-transport-https ca-certificates curl gnupg lsb-release || error_exit "Failed to install prerequisites for Docker."
 
         # Add Docker’s official GPG key
-        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg || error_exit "Failed to add Docker's GPG key."
+        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg || error_exit "Failed to add Docker's GPG key."
 
         # Set up the stable repository
         echo \
           "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu \
-          $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null || error_exit "Failed to add Docker repository."
+          $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null || error_exit "Failed to add Docker repository."
 
         # Update the apt package index again
-        sudo apt-get update -y || error_exit "Failed to update package index after adding Docker repository."
+        apt-get update -y || error_exit "Failed to update package index after adding Docker repository."
 
         # Install the latest version of Docker Engine, Docker CLI, and containerd
-        sudo apt-get install -y docker-ce docker-ce-cli containerd.io || error_exit "Failed to install Docker."
+        apt-get install -y docker-ce docker-ce-cli containerd.io || error_exit "Failed to install Docker."
 
         # Enable and start Docker service
-        sudo systemctl enable docker || error_exit "Failed to enable Docker service."
-        sudo systemctl start docker || error_exit "Failed to start Docker service."
+        systemctl enable docker || error_exit "Failed to enable Docker service."
+        systemctl start docker || error_exit "Failed to start Docker service."
 
         log "Docker installed successfully."
     else
@@ -112,14 +122,14 @@ install_docker_compose() {
         DOCKER_COMPOSE_VERSION=$(curl -s https://api.github.com/repos/docker/compose/releases/latest | grep tag_name | cut -d '"' -f 4)
 
         # Download Docker Compose binary
-        sudo curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose || error_exit "Failed to download Docker Compose."
+        curl -L "https://github.com/docker/compose/releases/download/${DOCKER_COMPOSE_VERSION}/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose || error_exit "Failed to download Docker Compose."
 
         # Apply executable permissions to the binary
-        sudo chmod +x /usr/local/bin/docker-compose || error_exit "Failed to apply executable permissions to Docker Compose."
+        chmod +x /usr/local/bin/docker-compose || error_exit "Failed to apply executable permissions to Docker Compose."
 
         # Create a symbolic link to /usr/bin if necessary
         if [ ! -L /usr/bin/docker-compose ]; then
-            sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose || error_exit "Failed to create symbolic link for Docker Compose."
+            ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose || error_exit "Failed to create symbolic link for Docker Compose."
         fi
 
         log "Docker Compose installed successfully."
@@ -136,7 +146,7 @@ init_npm() {
         npm init -y || error_exit "npm initialization failed."
         log "Initialized npm in $PROJECT_DIR."
     else
-        log "npm already initialized in $PROJECT_DIR."
+        log "package.json already exists in $PROJECT_DIR."
     fi
 
     # Install necessary packages
@@ -144,6 +154,13 @@ init_npm() {
     cd "$PROJECT_DIR"
     npm install node-red dotenv node-red-node-email node-red-node-slack node-red-contrib-github language-detect diff nodemailer jest mocha bcrypt --save || error_exit "npm install failed."
     log "npm dependencies installed successfully."
+}
+
+# Function to create package.json with specified content (if needed)
+create_custom_package_json() {
+    # If you have a custom package.json, you can place it here.
+    # For this script, we assume npm init -y suffices.
+    :
 }
 
 # Function to create .env file with specified content
@@ -195,41 +212,54 @@ EOF
     fi
 }
 
-# Function to create package.json with specified content
-create_package_json() {
-    if [ ! -f "$PACKAGE_JSON_FILE" ]; then
-        cat > "$PACKAGE_JSON_FILE" <<'EOF'
-{
-  "name": "node-red-automation",
-  "version": "1.0.0",
-  "description": "Automated Node-RED workflow for AI-driven code analysis, validation, and deployment.",
-  "main": "index.js",
-  "scripts": {
-    "start": "node-red --userDir ./flows --flows flow.json",
-    "test": "jest"
-  },
-  "dependencies": {
-    "node-red": "^3.1.0",
-    "node-red-node-email": "^1.0.1",
-    "node-red-node-slack": "^1.1.0",
-    "node-red-contrib-github": "^1.0.2",
-    "language-detect": "^1.1.0",
-    "diff": "^5.1.0",
-    "dotenv": "^16.0.0",
-    "nodemailer": "^6.9.0",
-    "bcrypt": "^5.1.0"
-  },
-  "devDependencies": {
-    "jest": "^29.0.0",
-    "mocha": "^10.0.0"
-  },
-  "author": "Your Name",
-  "license": "MIT"
+# Function to generate bcrypt hash for admin password
+generate_bcrypt_hash() {
+    read -sp "Enter admin password for Node-RED: " ADMIN_PASSWORD
+    echo
+    # Generate bcrypt hash
+    ADMIN_HASH=$(python3 -c "import bcrypt, sys; print(bcrypt.hashpw(sys.stdin.read().encode('utf-8'), bcrypt.gensalt()).decode())" <<< "$ADMIN_PASSWORD")
+    echo "$ADMIN_HASH"
 }
+
+# Function to create settings.js with security enhancements
+create_settings_js() {
+    if [ ! -f "$SETTINGS_FILE" ]; then
+        log "Generating settings.js..."
+
+        cat > "$SETTINGS_FILE" <<'EOF'
+// Load environment variables
+require('dotenv').config();
+
+module.exports = {
+    // Add your Node-RED settings here
+    httpAdminRoot: "/admin",
+    httpNodeRoot: "/api",
+    userDir: "/data",
+    functionGlobalContext: {}, // enables global context
+    adminAuth: {
+        type: "credentials",
+        users: [{
+            username: "admin",
+            password: "PLACEHOLDER_HASH", // This will be replaced by the script
+            permissions: "*"
+        }]
+    },
+    // Enable HTTPS if needed
+    // https: {
+    //     key: fs.readFileSync('privatekey.pem'),
+    //     cert: fs.readFileSync('certificate.pem')
+    // },
+    // Other settings...
+};
 EOF
-        log "Created package.json with required dependencies."
+
+        # Replace PLACEHOLDER_HASH with the actual bcrypt hash
+        BCRYPT_HASH=$(generate_bcrypt_hash)
+        sed -i "s/PLACEHOLDER_HASH/$BCRYPT_HASH/" "$SETTINGS_FILE" || error_exit "Failed to insert bcrypt hash into settings.js."
+
+        log "Generated settings.js with admin authentication."
     else
-        log "package.json already exists. Skipping creation."
+        log "settings.js already exists. Skipping generation."
     fi
 }
 
@@ -959,8 +989,8 @@ setup_automated_backups() {
 #!/bin/bash
 
 # Directory to backup
-SOURCE_DIR="$(pwd)"
-BACKUP_DIR="$(pwd)/backups"
+SOURCE_DIR="/absolute/path/to/node-red-automation" # Replace with the actual absolute path
+BACKUP_DIR="/absolute/path/to/node-red-automation/backups" # Replace with the actual absolute path
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 BACKUP_FILE="$BACKUP_DIR/backup_$TIMESTAMP.tar.gz"
 
@@ -973,12 +1003,22 @@ find "$BACKUP_DIR" -type f -name "*.tar.gz" -mtime +7 -exec rm {} \;
 echo "Backup created at $BACKUP_FILE and old backups removed."
 EOF
 
+    # Replace placeholders with actual absolute paths
+    sed -i "s|/absolute/path/to/node-red-automation|$PROJECT_DIR|g" "$BACKUP_DIR/backup.sh" || error_exit "Failed to set absolute paths in backup.sh."
+
     chmod +x "$BACKUP_DIR/backup.sh"
 
-    # Add cron job (runs daily at 2 AM)
-    CRON_JOB="0 2 * * * $(pwd)/backups/backup.sh"
-    (crontab -l 2>/dev/null | grep -v "$(pwd)/backups/backup.sh"; echo "$CRON_JOB") | crontab -
-    log "Set up automated backups with cron."
+    # Define absolute cron job path
+    CRON_JOB="0 2 * * * $BACKUP_DIR/backup.sh"
+
+    # Check if the cron job already exists to avoid duplicates
+    crontab -l 2>/dev/null | grep -F "$BACKUP_DIR/backup.sh" >/dev/null
+    if [ $? -ne 0 ]; then
+        (crontab -l 2>/dev/null; echo "$CRON_JOB") | crontab -
+        log "Added backup cron job."
+    else
+        log "Backup cron job already exists. Skipping addition."
+    fi
 }
 
 # Function to implement security enhancements
@@ -1027,37 +1067,9 @@ EOF
     # Note: Ensure all external communications use HTTPS/TLS.
     # For Node-RED editor access, consider setting up HTTPS.
 
-    # 3. Access Controls
-    # Locate the Node-RED settings.js file. By default, it's in ~/.node-red/
-    SETTINGS_DIR="$CONFIG_DIR"
-    SETTINGS_FILE="$SETTINGS_DIR/settings.js"
+    # 3. Access Controls are handled in create_settings_js()
 
-    create_dir "$SETTINGS_DIR"
-
-    if [ ! -f "$SETTINGS_FILE" ]; then
-        cp "$(npm root -g)/node-red/settings.js" "$SETTINGS_FILE" || error_exit "Failed to copy default settings.js."
-        log "Copied default settings.js to $SETTINGS_FILE."
-    else
-        log "settings.js already exists at $SETTINGS_FILE. Skipping copy."
-    fi
-
-    # Append adminAuth configuration if not already present
-    if ! grep -q "adminAuth" "$SETTINGS_FILE"; then
-        cat >> "$SETTINGS_FILE" <<'EOF'
-
-adminAuth: {
-    type: "credentials",
-    users: [{
-        username: "admin",
-        password: "$2a$08$XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX", // Replace with your bcrypt hash
-        permissions: "*"
-    }]
-},
-EOF
-        log "Configured Node-RED access controls in settings.js."
-    else
-        log "adminAuth already configured in settings.js. Skipping."
-    fi
+    log "Implemented security enhancements."
 }
 
 # Function to create README.md with detailed setup instructions
@@ -1065,3 +1077,31 @@ create_readme() {
     cat > "$README_FILE" <<'EOF'
 # Node-RED Automation
 
+## Description
+Automated Node-RED workflow for AI-driven code analysis, validation, and deployment to GitHub with notifications via Slack and email alerts. Additionally, the setup includes Dockerization for consistent environments, CI/CD pipelines using GitHub Actions, monitoring with Prometheus and Grafana, unit and integration testing, reusable subflows, security enhancements, automated backups, and comprehensive documentation.
+
+## Features
+- **Dynamic Code Range Selection:** Automatically extracts and processes specific ranges of code.
+- **Multiple Chatbot Interactions:** Alternates between multiple AI chatbots for adversarial testing and validation.
+- **Recursive Validation:** Iteratively refines code through multiple AI validation cycles.
+- **GitHub Integration:** Commits validated and corrected code to a specified GitHub repository.
+- **Notifications:**
+  - **Slack:** Sends success notifications upon successful GitHub commits.
+  - **Email:** Sends error alerts for any failures during the workflow.
+- **Secure Configuration Management:** Utilizes environment variables to manage sensitive information securely.
+- **Dockerization:** Ensures consistent environments across deployments.
+- **CI/CD Pipeline:** Automates testing and deployment using GitHub Actions.
+- **Monitoring and Logging:** Integrates Prometheus and Grafana for performance metrics and logs visualization.
+- **Testing Frameworks:** Implements unit and integration tests using Jest and Mocha.
+- **Reusable Subflows:** Encapsulates common functionalities for maintainability.
+- **Automated Backups:** Regularly backs up configurations and source code.
+- **Security Enhancements:** Implements rate limiting, data encryption, and access controls.
+
+## Setup Instructions
+
+### 1. Run the Setup Script
+Ensure you have the necessary permissions and that required commands (`Node.js`, `npm`, `docker`, `docker-compose`) are installed. If Docker is not installed, the script will handle its installation.
+
+```bash
+sudo chmod +x setup-node-red-automation.sh
+sudo ./setup-node-red-automation.sh
