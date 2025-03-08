@@ -120,3 +120,428 @@ pre code {
     font-size: 14px;
     line-height: 1.5;
 }
+/* Previous styles remain */
+
+/* New styles for CI/CD pipelines */
+.adversarial-ci-pipelines-container {
+    display: flex;
+    gap: 30px;
+    margin-top: 30px;
+}
+
+.pipeline-actions {
+    width: 40%;
+}
+
+.pipelines-list {
+    width: 60%;
+}
+
+/* New styles for code analysis */
+.adversarial-code-analysis {
+    margin-bottom: 30px;
+}
+
+.analysis-results {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    white-space: pre-wrap;
+}
+
+/* New styles for refactoring */
+.adversarial-code-refactoring {
+    margin-bottom: 30px;
+}
+
+.refactored-code {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    white-space: pre-wrap;
+}
+
+/* New styles for security, performance, and formatting */
+.adversarial-security-container,
+.adversarial-performance-container {
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    margin-top: 30px;
+}
+
+.security-section,
+.performance-section {
+    background-color: #f9f9f9;
+    padding: 20px;
+    border-radius: 5px;
+}
+
+.vulnerability-item {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 3px;
+}
+
+.vulnerability-item h4 {
+    margin-top: 0;
+    color: #d63638;
+}
+
+.analysis-results,
+.optimized-code,
+.formatted-code,
+.translated-code {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 3px;
+    white-space: pre-wrap;
+}
+
+/* New styles for collaboration */
+.adversarial-collaboration-container {
+    display: flex;
+    gap: 30px;
+    margin-top: 30px;
+}
+
+.collaboration-session-list {
+    width: 40%;
+}
+
+.collaboration-session-details {
+    width: 60%;
+}
+
+.collaboration-session-item {
+    padding: 15px;
+    margin-bottom: 15px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+
+.collaboration-session-item h3 {
+    margin-top: 0;
+}
+
+.collaboration-session-item .session-meta {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+.collaboration-actions {
+    margin-top: 20px;
+}
+
+.collaboration-code-editor {
+    height: 400px;
+    margin-top: 20px;
+}
+
+/* New styles for translations */
+.adversarial-code-translate {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+
+/* New styles for code diff viewer */
+.diff-container {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+.diff-pane {
+    flex: 1;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    padding: 15px;
+}
+
+.diff-results {
+    margin-top: 30px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+}
+
+.diff-item {
+    margin-bottom: 10px;
+    padding: 8px;
+    border-radius: 3px;
+}
+
+.diff-item.added {
+    background-color: #d4edda;
+    color: #155724;
+}
+
+.diff-item.deleted {
+    background-color: #f8d7da;
+    color: #721c24;
+}
+
+/* New styles for code comments */
+.adversarial-code-comments {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+
+.comment-item {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+}
+
+.comment-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.comment-date {
+    font-size: 0.9em;
+    color: #666;
+}
+
+/* New styles for code snippets */
+.adversarial-code-snippets {
+    margin-bottom: 30px;
+}
+
+.snippet-item {
+    background-color: #f9f9f9;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.snippet-meta {
+    font-size: 0.9em;
+    color: #666;
+    margin-bottom: 10px;
+}
+
+.snippet-tags .tag {
+    display: inline-block;
+    background-color: #e9ecef;
+    padding: 3px 8px;
+    border-radius: 3px;
+    margin-right: 5px;
+    font-size: 0.8em;
+}
+
+/* New styles for theme switcher */
+.theme-switcher {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    z-index: 1000;
+}
+
+/* New styles for code sharing */
+.adversarial-code-sharing {
+    margin-bottom: 30px;
+    padding: 20px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+
+/* New styles for code environments */
+.adversarial-environments-container {
+    display: flex;
+    gap: 30px;
+    margin-top: 30px;
+}
+
+.environment-actions {
+    width: 40%;
+}
+
+.environments-list {
+    width: 60%;
+}
+
+.environment-details {
+    margin-bottom: 20px;
+    padding: 15px;
+    background-color: #f9f9f9;
+    border-radius: 5px;
+}
+
+.environment-code {
+    height: 400px;
+    background-color: #2d2d2d;
+    color: #f8f8f8;
+    font-family: monospace;
+    white-space: pre;
+    padding: 10px;
+    overflow-x: auto;
+    border-radius: 3px;
+}
+
+/* New styles for activity logs */
+.activity-logs-container {
+    margin-top: 30px;
+}
+
+.activity-log-item {
+    background-color: #f9f9f9;
+    padding: 15px;
+    margin-bottom: 15px;
+    border-radius: 5px;
+}
+
+.activity-log-header {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.activity-log-content {
+    font-family: monospace;
+    white-space: pre-wrap;
+    background-color: #f1f1f1;
+    padding: 10px;
+    border-radius: 3px;
+}
+
+/* New styles for code minification */
+.code-minification {
+    margin-bottom: 30px;
+}
+
+.minified-code {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    white-space: pre-wrap
+}
+/* New styles for CI/CD pipelines */
+.adversarial-ci-pipelines-container {
+    display: flex;
+    gap: 30px;
+    margin-top: 30px;
+}
+
+.pipeline-actions {
+    width: 40%;
+}
+
+.pipelines-list {
+    width: 60%;
+}
+
+/* New styles for code analysis */
+.adversarial-code-analysis {
+    margin-bottom: 30px;
+}
+
+.analysis-results {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    white-space: pre-wrap;
+}
+
+/* New styles for refactoring */
+.adversarial-code-refactoring {
+    margin-bottom: 30px;
+}
+
+.refactored-code {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    white-space: pre-wrap;
+}
+
+/* New styles for code editor and comparison */
+.adversarial-code-editor-container {
+    margin-bottom: 30px;
+}
+
+.code-editor-wrapper {
+    border: 1px solid #ddd;
+    border-radius: 3px;
+    position: relative;
+}
+
+.ace_editor {
+    width: 100%;
+    height: 100%;
+}
+
+.comparison-container {
+    display: flex;
+    gap: 30px;
+    margin-bottom: 30px;
+}
+
+.comparison-pane {
+    flex: 1;
+}
+
+.comparison-actions {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.comparison-results {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 3px;
+}
+
+.unit-testing-container, .code-review-container {
+    margin-bottom: 30px;
+}
+
+.test-results, .review-results {
+    margin-top: 20px;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border-radius: 3px;
+    white-space: pre-wrap;
+}
+
+.templates-container {
+    display: flex;
+    gap: 30px;
+    margin-top: 30px;
+}
+
+.template-actions {
+    width: 50%;
+}
+
+.template-list {
+    width: 50%;
+}
+
+.template-code-display {
+    background-color: #2d2d2d;
+    color: #f8f8f8;
+    font-family: monospace;
+    white-space: pre;
+    padding: 10px;
+    overflow-x: auto;
+}
+
+.template-actions {
+    margin-top: 20px;
+}

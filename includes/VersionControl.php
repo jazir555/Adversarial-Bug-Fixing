@@ -1,40 +1,42 @@
 class VersionControl {
-    private $versions_dir;
-
-    public function __construct() {
+    private static $instance;
+    private $versions_directory;
+    
+    private function __construct() {
         $upload_dir = wp_upload_dir();
-        $this->versions_dir = trailingslashit($upload_dir['basedir']) . 'adversarial-code-generator/versions';
-        wp_mkdir_p($this->versions_dir);
+        $this->versions_directory = trailingslashit($upload_dir['basedir']) . 'adversarial-code-generator/versions';
+        wp_mkdir_p($this->versions_directory);
     }
-
-    public function save_version($entry_id, $code, $message) {
+    
+    public static function get_instance() {
+        if (!self::$instance) {
+            self::$instance = new self();
+        }
+        return self::$instance;
+    }
+    
+    public function save_version($code, $prompt, $language) {
+        $version_id = uniqid();
         $version_data = [
-            'entry_id' => $entry_id,
             'code' => $code,
-            'message' => $message,
+            'prompt' => $prompt,
+            'language' => $language,
             'created_at' => current_time('mysql')
         ];
         
-        $filename = $this->versions_dir . '/' . $entry_id . '_' . uniqid() . '.json';
-        file_put_contents($filename, wp_json_encode($version_data));
-    }
-
-    public function get_versions($entry_id) {
-        $versions = [];
-        $files = glob($this->versions_dir . '/' . $entry_id . '_*.json');
+        $version_file = $this->versions_directory . '/' . $version_id . '.json';
+        file_put_contents($version_file, json_encode($version_data));
         
-        foreach ($files as $file) {
-            $content = file_get_contents($file);
-            $version_data = json_decode($content, true);
-            if ($version_data && isset($version_data['entry_id']) && $version_data['entry_id'] == $entry_id) {
-                $versions[] = $version_data;
-            }
+        return $version_id;
+    }
+    
+    public function get_version($version_id) {
+        $version_file = $this->versions_directory . '/' . $version_id . '.json';
+        
+        if (!file_exists($version_file)) {
+            throw new Exception("Version not found");
         }
         
-        usort($versions, function($a, $b) {
-            return strtotime($b['created_at']) - strtotime($a['created_at']);
-        });
-        
-        return $versions;
+        return json_decode(file_get_contents($version_file), true);
     }
 }
