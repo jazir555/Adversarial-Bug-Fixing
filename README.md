@@ -1,4 +1,4 @@
-al LLM generating code based on a given prompt (e.g., "Build me a recipe maker and generate a recipe for a sandwich.").
+# AI LLM generating code based on a given prompt (e.g., "Build me a recipe maker and generate a recipe for a sandwich.").
 
 Adversarial Bug Checking – The generated code is then automatically routed to multiple LLMs (e.g., Claude and Gemini) for bug detection.
 
